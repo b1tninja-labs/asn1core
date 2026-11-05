@@ -54,6 +54,9 @@ Seven classes, each reproduced by execution.
 | 6 | Original TLV bytes are unrecoverable | `02 81 01 00` decodes, then re-encodes as `02 01 00` | probe; this is the I3 blocker below |
 | 7 | **Validation is a bare `assert`, and the fallback rewrites the value** | `ObjectIdentifier.from_string("3.0")` and `("1.41")` raise `AssertionError` in normal execution, but under **`python -O`** both are *accepted* and silently become **`2.40`** and **`2.1`** | `sdk-forge/probe_oid_assert.py`, run both ways. The worst of the set: not a crash and not a rejection but a **different identity**, arriving quietly in exactly the optimised configuration a deployment is most likely to run |
 
+| 8 | **The OID encoder writes bytes a conforming decoder reads as a different OID** | `bytes(ObjectIdentifier.from_string("2.100.3"))` is `b403`, and snmpy's decoder reads `b403` back as 2.100.3. X.690 reads it as **2.6579**, because `0xB4` carries the continuation bit and the pair is therefore one value: `(0x34 << 7) | 0x03 = 6659` | `sdk-forge/probe_oid_assert.py`. Same under `python -O` as not: this one is not an assert problem |
+| 8b | *(how it hides)* | snmpy's own test suite passes, because its encoder and decoder are wrong in matching directions | the reason a green test suite is not evidence of conformance - only a second, independent decoder catches it |
+
 **A row that was here and has been withdrawn.** An earlier draft of this table listed an eighth
 defect: "illegal OID first octet silently repaired - `06 02 7F 01` should be refused, not read
 as 2.47.1", because `0x7F` implies a first arc of 3 and arcs above 2 are not permitted. That is
@@ -146,7 +149,7 @@ rot, and it carries no meaning.
 | `dk.roundtrip` | `VECTORS.md` properties | [x] | `node.py` | `test_canonical_document_round_trips_byte_for_byte`, `test_unknown_tags_survive_decode_and_encode`, `test_repeated_children_stay_distinct_nodes` |
 | `dk.crosscheck` | the second opinion `VECTORS.md` owes | [x] | `tools/crosscheck_store.py` | 75 trust-store certificates, 868,500 bytes, **zero failures** parsing on the DER path and re-encoding byte-identically (2026-11-05). Coverage limit stated in `VECTORS.md`: those documents use context tags below 31 and definite lengths only, so this does not exercise the high-tag-number or indefinite-length paths |
 | `dk.indefinite` | X.690 section 8.1.3.4 | **partial** | `node.py` | `test_indefinite_terminator_is_not_searched_for_inside_content` proves the constructed case. Primitive indefinite content is refused with a named error because the corpus row is unresolved - not implemented, and not guessed |
-| `dk.oid` | X.690 section 8.19 | [ ] | not written | **defect 7 stays open.** There is no OID content parsing yet, so the `min(2, octet // 40)` clamp this obligation exists to fix is unfixed here |
+| `dk.oid` | X.690 section 8.19 | [x] | `oid.py`, wired into `node._der_value_check` for tag 6 | `tests/test_oid_corpus.py`: the 13 corpus vectors encode and decode byte-exactly, `3.0` and `1.41` raise rather than becoming `2.40` under `-O`, and `test_library_contains_no_assert_statements` keeps it that way. **Closed 2026-11-05**; the 75-certificate trust-store cross-check passes with the OID check active, which is the second opinion that the retracted first-arc rule never got |
 | `dk.time` | RFC 5280 section 4.1.2.5.1 | [ ] | not written | UTCTime epoch rule and the 2049 boundary |
 | `dk.name` | RFC 5280 section 4.1.2.4 | [ ] | not written | RDN handling, needs the SET OF fixture |
 | `dk.spki` | RFC 5280 section 4.1.2.7 | [ ] | not written | the hash the nine dependent projects key on |

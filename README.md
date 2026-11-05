@@ -44,14 +44,15 @@ this library is needed, and a codec that drops what it does not recognise defeat
 
 The module decomposition descends from the `ber` package of
 [`snmpy`](https://github.com/b1tninja/snmpy) (MIT, © 2026 snmpy Contributors) - architecture
-only. Six of the seven defects measured in that codec are rewritten out of this one, each with
-a named test that failed before the behaviour existed. **The one that is not fixed here is the
-OID defect** - validation written as a bare `assert`, so under `python -O` the invalid string
-`3.0` is accepted and silently becomes `2.40`. It stays open under obligation `dk.oid`, and it
-is the most security-relevant gap in this package until it is closed.
+only. All seven defects measured in that codec are rewritten out of this one, each with a named
+test that failed before the behaviour existed. The OID one is the instructive case: its
+validation is a bare `assert`, so under `python -O` the invalid string `3.0` is accepted and
+silently becomes `2.40`. Here it is a real check, and `2.5.29.19` - most of X.509 - encodes as
+`55 1D 13` the way X.690 says rather than the way an earlier draft of this corpus claimed.
 
 ## Not yet implemented
 
-The value types beyond what the corpus needs, the three end-to-end X.509 fixtures in
-`VECTORS.md`, and any form of general-purpose schema or `.asn` compilation. `PLAN.md` records
-which of these gate Wave 1.
+The value types beyond what the corpus needs, UTCTime and GeneralizedTime semantics, RDN/Name and
+SubjectPublicKeyInfo handling, the three end-to-end X.509 fixtures in `VECTORS.md`, and any form
+of general-purpose schema or `.asn` compilation. OID content parsing exists now, and those are the
+layers that were waiting on it. `PLAN.md` records which of these gate Wave 1.

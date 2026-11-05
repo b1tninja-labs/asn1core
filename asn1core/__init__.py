@@ -19,14 +19,17 @@ from .der import check_bit_string, check_boolean, check_integer, check_set_of, v
 from .errors import Asn1Error, DecodeError, DepthExceeded, DerViolation, TruncatedError
 from .length import INDEFINITE, MAX_CONTENT_BYTES, decode_length, encode_length
 from .node import MAX_DEPTH, Node, decode, encode_der
+from .oid import MAX_ARC_VALUE, MAX_OID_ARCS, check_oid, decode_oid, encode_oid, parse_oid_string
 from .tag import MAX_TAG_NUMBER, Tag, TagClass, decode_tag, encode_tag
 
 __version__ = "0.0.1"
 
 __all__ = [
     "INDEFINITE",
+    "MAX_ARC_VALUE",
     "MAX_CONTENT_BYTES",
     "MAX_DEPTH",
+    "MAX_OID_ARCS",
     "MAX_TAG_NUMBER",
     "Asn1Error",
     "DecodeError",
@@ -40,12 +43,16 @@ __all__ = [
     "check_bit_string",
     "check_boolean",
     "check_integer",
+    "check_oid",
     "check_set_of",
     "decode",
     "decode_length",
+    "decode_oid",
     "decode_tag",
     "encode_der",
     "encode_length",
+    "encode_oid",
     "encode_tag",
+    "parse_oid_string",
     "validate_der",
 ]

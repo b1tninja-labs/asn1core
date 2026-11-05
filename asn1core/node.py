@@ -24,6 +24,7 @@ from dataclasses import dataclass
 
 from .errors import DecodeError, DepthExceeded, DerViolation, TruncatedError
 from .length import INDEFINITE, check_length_canonical, decode_length, encode_length
+from .oid import check_oid
 from .tag import Tag, decode_tag, encode_tag
 
 __all__ = ["MAX_DEPTH", "Node", "decode", "encode_der"]
@@ -251,5 +252,10 @@ def _der_value_check(tag: Tag, payload: bytes, node: Node, *, offset: int) -> No
         check_integer(payload, offset=offset)
     elif tag.number == 3:
         check_bit_string(payload, offset=offset)
+    elif tag.number == 6:
+        # oid-canonical-form. This check carries more weight than the others: identifiers carry
+        # meaning, and a spelling a peer reads as a different OID is an identity substitution
+        # rather than a formatting difference.
+        check_oid(payload, offset=offset)
     elif tag.number == 17:
         check_set_of(node)
