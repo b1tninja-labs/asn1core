@@ -124,6 +124,7 @@ rot, and it carries no meaning.
 | `dk.depth` | this package's own bound | [x] | `node.py` | `test_depth_is_bounded_by_a_named_error` |
 | `dk.no-asserts` | SECURITY.md rule 3 | [x] | whole package | `test_library_contains_no_assert_statements` |
 | `dk.roundtrip` | `VECTORS.md` properties | [x] | `node.py` | `test_canonical_document_round_trips_byte_for_byte`, `test_unknown_tags_survive_decode_and_encode`, `test_repeated_children_stay_distinct_nodes` |
+| `dk.crosscheck` | the second opinion `VECTORS.md` owes | [x] | `tools/crosscheck_store.py` | 75 trust-store certificates, 868,500 bytes, **zero failures** parsing on the DER path and re-encoding byte-identically (2026-11-05). Coverage limit stated in `VECTORS.md`: those documents use context tags below 31 and definite lengths only, so this does not exercise the high-tag-number or indefinite-length paths |
 | `dk.indefinite` | X.690 section 8.1.3.4 | **partial** | `node.py` | `test_indefinite_terminator_is_not_searched_for_inside_content` proves the constructed case. Primitive indefinite content is refused with a named error because the corpus row is unresolved - not implemented, and not guessed |
 | `dk.oid` | X.690 section 8.19 | [ ] | not written | **defect 7 stays open.** There is no OID content parsing yet, so the `min(2, octet // 40)` clamp this obligation exists to fix is unfixed here |
 | `dk.time` | RFC 5280 section 4.1.2.5.1 | [ ] | not written | UTCTime epoch rule and the 2049 boundary |

@@ -181,9 +181,17 @@ imports nothing from `asn1core` on purpose: expectations validated against the c
 satisfy them are a tautology. The copy in `sdk-forge` was deleted rather than kept in step, so
 there is one source of truth.
 
-Two things are still owed before any row here is trusted as an oracle: every
-`[verify against X.690]` marker resolved against the ITU text or a second independent
-implementation, and a cross-check of the accept/reject verdicts against an existing
-decoder's vectors rather than against reasoning alone. Agreement between this file and a
-second implementation is what turns a guess into a specification.
+One of the two things originally owed here is now partly paid. **`tools/crosscheck_store.py`**
+parses every certificate in the local X.509 trust store - 75 documents, 868,500 bytes, none of
+them authored in this repository - and requires each to parse on the DER path and re-encode
+byte for byte: **zero failures** on 2026-11-05. That is agreement with somebody else's
+encoder, which is what turns a guess into a specification.
+
+**Its limits are the part worth reading.** Every one of those certificates uses context tag
+numbers below 31 and definite lengths only, so the rows that exist precisely because snmpy got
+them wrong - `tag-c-31` and above, `len-indefinite`, `tag-nonminimal` - are untouched by it.
+And real-world DER cannot validate a *rejection* at all, because a trust store contains only
+documents that should be accepted. Still owed: every `[verify against X.690]` marker resolved
+against the ITU text, and negative vectors taken from a second implementation rather than from
+my own reasoning about what it ought to refuse.
 

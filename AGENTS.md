@@ -16,6 +16,7 @@ python -O -m pytest -q           # same suite, asserts stripped
 python -m ruff check .
 python -m ruff format --check .
 python -m mypy asn1core tests    # bare `mypy` is a usage error; name the targets
+python tools/crosscheck_store.py # 75 real certificates, byte-exact round trip
 ```
 
 Two more are documented but **not exercised here**, because installing them needs a network
