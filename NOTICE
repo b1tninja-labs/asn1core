@@ -12,11 +12,14 @@ Derived architecture
 The module decomposition (tag, length, object), the tag-class and universal-tag enums, and
 several value-class ideas in this package were taken from the `ber` package of `snmpy`
 (https://github.com/b1tninja/snmpy), Copyright (c) 2026 snmpy Contributors, distributed
-under the MIT License. snmpy's own tests for that package are reproduced here as a
-regression floor, so a behaviour its existing callers rely on cannot regress silently.
+under the MIT License. Four of its six test functions are re-expressed here as
+`tests/test_snmpy_floor.py`, so behaviour its existing callers rely on cannot regress silently.
+The two that are **not** ported are its `ObjectIdentifier` value-type tests, because this
+package has no OID type yet (obligation `dk.oid`); claiming a complete floor would be worse
+than admitting a short one.
 
 **Only the architecture was carried over.** Every behaviour in this package is written
-against VECTORS.md, because the code it descends from has seven measured defects, catalogued
+against VECTORS.md, because the code it descends from has eight measured defects, catalogued
 in PLAN.md under "Defects that must be fixed, not moved". That distinction is not legal
 pedantry: MIT's single condition is that the copyright notice and permission notice appear
 in all copies or substantial portions of the software, so the text is reproduced below

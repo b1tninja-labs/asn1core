@@ -27,7 +27,7 @@ Nothing published. This package exists on disk and nowhere else.
   length forms including the reserved and non-minimal ones, eight truncation cases, the DER
   restrictions BER tolerates, and the round-trip properties that a defect like "discards the
   original bytes" survives untouched.
-- `PLAN.md` - the decision record, including **seven defect classes measured by execution
+- `PLAN.md` - the decision record, including **eight defect classes measured by execution
   against the codec this design descends from** (probe: `sdk-forge/probe_ber.py`), among them
   `OverflowError` at every exact power of 256 on encode, tag numbers above 30 decoding to
   wrong values, and an indefinite-length terminator matching `00 00` inside the content.

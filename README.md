@@ -44,8 +44,12 @@ this library is needed, and a codec that drops what it does not recognise defeat
 
 The module decomposition descends from the `ber` package of
 [`snmpy`](https://github.com/b1tninja/snmpy) (MIT, © 2026 snmpy Contributors) - architecture
-only. All seven defects measured in that codec are rewritten out of this one, and each has a
-named test that failed before the behaviour existed. `NOTICE` carries the full MIT text.
+only. Six of the eight defects measured in that codec are rewritten out of this one, each with
+a named test that failed before the behaviour existed. **The two that are not fixed here are
+the OID pair:** defect 7 (an illegal first arc clamped instead of refused) and defect 8
+(validation written as a bare `assert`, so under `python -O` an input of `3.0` is silently
+accepted as `2.40`). Both stay open under obligation `dk.oid`, which is currently the most
+security-relevant gap in this package. `NOTICE` carries the full MIT text.
 
 ## Not yet implemented
 

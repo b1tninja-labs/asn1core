@@ -42,7 +42,7 @@ files of unrelated work, so nothing here touches it).
 
 ## Defects that must be fixed, not moved
 
-Seven classes, each reproduced by execution.
+Eight classes, each reproduced by execution.
 
 | # | Defect | Measured | Basis |
 |---|---|---|---|
@@ -53,10 +53,15 @@ Seven classes, each reproduced by execution.
 | 5 | Indefinite length terminates on *content*, not on EOC | `04 80 41 00 00 42 00 00` decodes as length **1** where the answer is **4** | probe; `buffer.index(b"\0\0")` at `object.py:164` finds the first NUL pair inside the data. Two consecutive zero bytes are everywhere - zero-padded integers, zero OID arcs, addresses - so this desyncs the whole parse rather than mis-sizing one object |
 | 6 | Original TLV bytes are unrecoverable | `02 81 01 00` decodes, then re-encodes as `02 01 00` | probe; this is the I3 blocker below |
 | 7 | Illegal OID first octet is silently repaired | `06 02 7f 01` -> **2.47.1** instead of a refusal; `06 01 4f` -> **1.39**, correct, which confirms the corpus row | probe; `min(2, octet // 40)` at `object.py:244` clamps instead of rejecting |
+| 8 | **Validation is a bare `assert`, and the fallback rewrites the value** | `ObjectIdentifier.from_string("3.0")` and `("1.41")` raise `AssertionError` in normal execution, but under **`python -O`** both are *accepted* and silently become **`2.40`** and **`2.1`** | `sdk-forge/probe_oid_assert.py`, run both ways. The worst of the eight: not a crash and not a rejection but a **different identity**, arriving quietly in exactly the optimised configuration a deployment is most likely to run |
 
-Run under `python -O` the table is unchanged: the codec's `assert not (length >> 128)` at
-`object.py:143` is not load-bearing for any case here. It still does not license asserts for
-bounds in asn1core, but the claim is "not demonstrated", not "harmless".
+The first six rows are unchanged under `python -O`: the codec's `assert not (length >> 128)`
+at `object.py:143` is not load-bearing for any case the probe exercised, so the honest claim
+about it is "not demonstrated", not "harmless". **Row 8 is the opposite case and it was found
+by running the probe twice.** Read together, the two say something sharper than either: an
+assert that happens to be unnecessary in one path is invisible, while an assert in another path
+is load-bearing and silently removed - so "the suite passed under `-O`" only ever proves
+something about the paths the suite reaches.
 
 Three consequences that change this plan. **The compatibility surface is not the one I
 assumed:** `snmp/`, `snmpy/` and `examples/` import `ber` in **47 places across 31 files**,

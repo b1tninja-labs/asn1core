@@ -8,7 +8,7 @@ time it meets a real certificate.
 
 ## Why these particular cases
 
-The seven defect classes measured in `PLAN.md` are all boundary cases, and boundary cases are
+The eight defect classes measured in `PLAN.md` are all boundary cases, and boundary cases are
 where a decoder that "works" in practice is wrong:
 
 | Case class | The defect it would have caught |

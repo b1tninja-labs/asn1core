@@ -80,6 +80,7 @@ published and no version is assigned.
 ## Derived from snmpy, and what that means
 
 The architecture comes from `snmpy`'s `ber` package (MIT, © 2026 snmpy Contributors); the
-behaviour was written from `VECTORS.md` because the original has seven measured defects
+behaviour was written from `VECTORS.md` because the original has eight measured defects,
+six of which are fixed here
 (`PLAN.md`). **`NOTICE` must keep carrying the MIT text** - that is MIT's only condition, and
 `tools/check_dist.py` fails the build if the attribution ever disappears. Do not "tidy" it.
