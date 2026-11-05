@@ -161,3 +161,26 @@ is broken - and RFC 5280 §4.1.3.2 says which of those is disqualifying.
   the truncation table. Nineteen cases that did not exist before this file, covering the four
   bugs that did.
 
+
+## Provenance of these bytes, and what is still owed
+
+Every sequence above was written by hand from an encoding rule. Hand-written vectors are
+exactly where a wrong expectation hides, so the arithmetic behind the tag, length, INTEGER,
+BIT STRING and OID cases is re-derived from bit masks by
+**`D:\code\sdk-forge\check_vectors.py`**, which runs offline and prints
+`[ok] 38 vector derivations checked`. Before any code existed to bend around it, that script
+caught two errors in this file: `5F CE 0F` is application **primitive**, because a high tag
+number needs `11111` in the low five bits and leaves bit 5 as the only place constructed-ness
+can live (the constructed spelling is `7F CE 0F`), and `06 01 4F` is OID **1.39**, not 1.47.
+
+The script is a stopgap with an expiry date. It sits in `sdk-forge` only because this project
+has no package yet; it must move into this repository's own test suite the moment one exists,
+because a corpus whose expectations are validated by a file outside the repo that consumes it
+is a corpus that will silently rot.
+
+Two things are still owed before any row here is trusted as an oracle: every
+`[verify against X.690]` marker resolved against the ITU text or a second independent
+implementation, and a cross-check of the accept/reject verdicts against an existing
+decoder's vectors rather than against reasoning alone. Agreement between this file and a
+second implementation is what turns a guess into a specification.
+
