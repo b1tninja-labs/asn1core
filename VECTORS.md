@@ -8,12 +8,12 @@ time it meets a real certificate.
 
 ## Why these particular cases
 
-The four defects catalogued in `PLAN.md` are all boundary cases, and boundary cases are
+The seven defect classes measured in `PLAN.md` are all boundary cases, and boundary cases are
 where a decoder that "works" in practice is wrong:
 
 | Case class | The defect it would have caught |
 |---|---|
-| Tag numbers at and above 31 | `ObjectTag.decode` mis-decodes the multi-byte 0x1F continuation for **every** tag above 30, and breaks framing for the universal and application classes |
+| Tag numbers at and above 31 | `ObjectTag.decode` mis-decodes the multi-byte 0x1F continuation for **every** tag above 30 (`9f1f` becomes 3999), while `__bytes__` encodes the same value correctly - so encode and decode disagree |
 | Lengths at exact powers of 256 | `ObjectLength.encode` raises `OverflowError` at 256, 65536 and 16777216 |
 | Truncated input anywhere | escapes as `IndexError` rather than a named parse error |
 | Non-minimal encodings | BER tolerates them, DER does not; silently tolerating them is how one certificate ends up with two database keys |
@@ -53,7 +53,7 @@ are the actual DER restrictions, and an invented clause is worse than an unteste
 | `len-long-65536` | `04 83 01 00 00` + 65536 bytes | 65536 | **second OverflowError case** |
 | `len-nonminimal` | `04 81 7F` + 127 bytes | **reject as DER** | long form for a length that fits short form; forbidden by DER's definite-minimal-length rule `[verify against X.690]` |
 | `len-leading-zero` | `04 82 00 7F` + 127 bytes | **reject as DER** | length octets must be minimal |
-| `len-indefinite` | `30 80 ... 00 00` | accept as BER, **reject as DER** | indefinite length with end-of-contents; also needs the truncation test below |
+| `len-indefinite` | `30 80 ... 00 00` | accept as BER, **reject as DER** | indefinite length with end-of-contents, **constructed only**. The primitive spelling (`04 80 ... 00 00`) is a different question: X.690 encodes primitive indefinite content as a sequence of encoding units, so "the content is the bytes before the terminator" is not a defensible reading, and the row is **unresolved** `[verify against X.690]`. The decoder refuses it with a named error rather than guessing |
 | `len-overflow` | `04 88 FF FF FF FF FF FF FF FF` | reject with a named error, never `MemoryError` | an 8-byte length must not be trusted as an allocation size; cap and refuse |
 | `len-undefined-high` | `04 8F 01` | reject | low nibble 15 is reserved by X.690 |
 
@@ -155,11 +155,14 @@ is broken - and RFC 5280 §4.1.3.2 says which of those is disqualifying.
   coverage on the one function everything else depended on.
 - **Fragments stay human-readable.** One case per file, named by its id, so a failing test
   points at a rule rather than at a byte offset in a blob.
-- **The four known defects get named tests before any refactoring.** The defect list is the
-  regression suite: `tag-c-31`, `tag-c-128`, `tag-c-16384`, `tag-nonminimal`,
-  `len-long-256`, `len-long-65536`, `len-nonminimal`, `len-overflow`, and all eight rows of
-  the truncation table. Nineteen cases that did not exist before this file, covering the four
-  bugs that did.
+- **The known defects get named tests before any refactoring.** The defect list is the
+  regression suite: `tag-c-31`, `tag-c-63`, `tag-c-127`, `tag-c-128`, `tag-c-16383`,
+  `tag-c-16384`, `tag-nonminimal`, `len-long-256`, `len-long-65536`, `len-nonminimal`,
+  `len-undefined-high`, `len-overflow`, `len-indefinite`, and all eight rows of the truncation
+  table. The first draft of this file claimed "nineteen cases" while naming sixteen - the count
+  that matters is the suite's, not the prose's. As of 2026-11-05 the corpus is 87 tests in
+  `tests/test_defect_corpus.py`, `tests/test_structure_corpus.py` and
+  `tests/test_vector_arithmetic.py`, and the per-obligation state is recorded in `PLAN.md`.
 
 
 ## Provenance of these bytes, and what is still owed
@@ -173,10 +176,10 @@ caught two errors in this file: `5F CE 0F` is application **primitive**, because
 number needs `11111` in the low five bits and leaves bit 5 as the only place constructed-ness
 can live (the constructed spelling is `7F CE 0F`), and `06 01 4F` is OID **1.39**, not 1.47.
 
-The script is a stopgap with an expiry date. It sits in `sdk-forge` only because this project
-has no package yet; it must move into this repository's own test suite the moment one exists,
-because a corpus whose expectations are validated by a file outside the repo that consumes it
-is a corpus that will silently rot.
+The script has since moved into this repository as `tests/test_vector_arithmetic.py`, and it
+imports nothing from `asn1core` on purpose: expectations validated against the code that has to
+satisfy them are a tautology. The copy in `sdk-forge` was deleted rather than kept in step, so
+there is one source of truth.
 
 Two things are still owed before any row here is trusted as an oracle: every
 `[verify against X.690]` marker resolved against the ITU text or a second independent

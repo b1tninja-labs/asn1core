@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - run: ruff check .
+      - run: ruff format --check .
+      # Explicit targets: bare `mypy` is a usage error even with [tool.mypy] files set, so a
+      # CI line that works on a maintainer's machine can fail on a runner.
+      - run: mypy asn1core tests
+      - run: python -m build
+      - run: python tools/check_dist.py
+
+  test:
+    # Windows is not decoration. This codec gets handed bytes from a network, and the
+    # platforms disagree about nothing so much as large buffers and error text - but the
+    # reason it runs here is that the reference implementation's defects were found on a
+    # machine that was not the author's, and endianness of int.from_bytes is not the risk.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12", "3.13", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q --cov
+      # Asserts stripped: a wire path guarded by assert is unguarded in production, and the
+      # corpus row `no-asserts-on-wire` exists to keep this line from passing vacuously.
+      - run: python -O -m pytest -q

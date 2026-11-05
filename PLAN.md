@@ -106,21 +106,31 @@ X.690 is the kind of error this portfolio has already made more than once.
 
 ## Obligations
 
+`[x]` means a test with that exact name passes today, 2026-11-05. The `dk.` prefix is a
+survivor of this project's first name; it is kept so that references written elsewhere do not
+rot, and it carries no meaning.
+
 | Id | Spec | Status | Where | Evidence |
 |---|---|---|---|---|
-| `dk.tag-high` | X.690 sections 8.1.2-8.1.3 | [ ] | `der/tag` | `test_tag_boundaries` |
-| `dk.length-shortest` | X.690 section 8.1.3.4 | [ ] | `der/length` | `test_non_shortest_length_rejected` |
-| `dk.overflow` | X.690 section 8.1.3.5 | [ ] | `der/length` | `test_length_256_and_65536_encode` |
-| `dk.raw-bytes` | RFC 5280 section 4.1.3.2 | [ ] | `der/node` | `test_original_tlv_is_retained` |
-| `dk.integer` | X.690 section 8.3, RFC 5280 section 4.1.2.2 | [ ] | `der/integer` | `test_non_minimal_integer_rejected` |
-| `dk.bitstring` | X.690 section 8.6.2 | [ ] | `der/bitstring` | `test_unused_bits_must_be_zero` |
-| `dk.oid` | X.690 section 8.19 | [ ] | `der/oid` | `test_arc_over_127_and_first_two_arcs` |
-| `dk.truncated` | X.690 section 8 | [ ] | `der/decode` | `test_truncated_input_raises_named_error` |
-| `dk.time` | RFC 5280 section 4.1.2.5.1 | [ ] | `der/time` | `test_utc_time_epoch_and_generalized_only_after_2049` |
-| `dk.name` | RFC 5280 section 4.1.2.4 | [ ] | `x509/name` | `test_rdn_order_and_value_encoding` |
-| `dk.spki` | RFC 5280 section 4.1.2.7 | [ ] | `x509/spki` | `test_spki_hash_is_stable` |
-| `dk.cert` | RFC 5280 sections 4.1-4.1.12 | [ ] | `x509/cert` | `test_parses_fixture_and_reports_extensions` |
-| `dk.corpus` | `VECTORS.md` | [ ] | `tests/data` | `test_der_corpus` |
+| `dk.tag-high` | X.690 sections 8.1.2-8.1.3 | [x] | `tag.py` | `test_high_tag_number_decodes_and_round_trips`, `test_tag_class_and_constructed_bits_are_isolated_not_or_ed` |
+| `dk.length-shortest` | X.690 section 8.1.3.4 | [x] | `length.py` | `test_nonminimal_length_accepted_by_ber_refused_by_der` |
+| `dk.overflow` | X.690 section 8.1.3.5 | [x] | `length.py` | `test_length_encode_is_exact_at_every_power_of_256`, `test_length_overflow_is_a_named_error_not_an_allocation` |
+| `dk.raw-bytes` | RFC 5280 section 4.1.3.2 | [x] | `node.py` | `test_original_bytes_survive_a_noncanonical_parse` |
+| `dk.integer` | X.690 section 8.3, RFC 5280 section 4.1.2.2 | [x] | `der.py` | `test_minimal_integers_are_accepted`, `test_nonminimal_integer_is_refused_without_being_normalised` |
+| `dk.bitstring` | X.690 section 8.6.2 | [x] | `der.py` | `test_bit_string_content_rules` |
+| `dk.boolean` | X.690 section 8.5 | [x] | `der.py` | `test_boolean_content_rules` |
+| `dk.setof` | X.690 section 11.6 | [x] | `der.py` | `test_set_of_ordering_is_enforced_on_the_der_path` |
+| `dk.truncated` | X.690 section 8 | [x] | `node.py` | `test_truncated_input_raises_a_named_error` covers all seven error rows |
+| `dk.depth` | this package's own bound | [x] | `node.py` | `test_depth_is_bounded_by_a_named_error` |
+| `dk.no-asserts` | SECURITY.md rule 3 | [x] | whole package | `test_library_contains_no_assert_statements` |
+| `dk.roundtrip` | `VECTORS.md` properties | [x] | `node.py` | `test_canonical_document_round_trips_byte_for_byte`, `test_unknown_tags_survive_decode_and_encode`, `test_repeated_children_stay_distinct_nodes` |
+| `dk.indefinite` | X.690 section 8.1.3.4 | **partial** | `node.py` | `test_indefinite_terminator_is_not_searched_for_inside_content` proves the constructed case. Primitive indefinite content is refused with a named error because the corpus row is unresolved - not implemented, and not guessed |
+| `dk.oid` | X.690 section 8.19 | [ ] | not written | **defect 7 stays open.** There is no OID content parsing yet, so the `min(2, octet // 40)` clamp this obligation exists to fix is unfixed here |
+| `dk.time` | RFC 5280 section 4.1.2.5.1 | [ ] | not written | UTCTime epoch rule and the 2049 boundary |
+| `dk.name` | RFC 5280 section 4.1.2.4 | [ ] | not written | RDN handling, needs the SET OF fixture |
+| `dk.spki` | RFC 5280 section 4.1.2.7 | [ ] | not written | the hash the nine dependent projects key on |
+| `dk.cert` | RFC 5280 sections 4.1-4.1.12 | [ ] | not written | blocked on the three end-to-end fixtures |
+| `dk.corpus` | `VECTORS.md` | partial | `tests/` | 87 tests pass; every `[verify against X.690]` row is still open |
 
 ## Non-goals
 

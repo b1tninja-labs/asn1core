@@ -1,0 +1,3 @@
+# Marker file per PEP 561. Contents are ignored by type checkers; the file's existence is
+# the claim that this package is typed, so mypy consumes it rather than treating the import
+# as untyped. That claim is only made because the package is strict-typed under mypy.

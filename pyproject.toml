@@ -1,0 +1,117 @@
+[build-system]
+# Declared explicitly rather than relying on pip's legacy setuptools fallback: with no
+# build-system table pip injects an unpinned setuptools environment, so a build is
+# neither reproducible nor hermetic.
+requires = ["hatchling>1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "asn1core"
+dynamic = ["version"]
+description = "ASN.1 BER and DER codec that keeps the original TLV octets, so a signature can be verified over the bytes it was made over"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">3.12"
+authors = [{ name = "Justin Capella" }]
+keywords = ["asn1", "ber", "der", "x690", "x509", "certificate", "tlv", "parser"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Security :: Cryptography",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+# Empty, and deliberately so: this is a codec, and every dependency added here is a
+# dependency inherited by the nine projects that sit behind it.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "hypothesis",
+  "ruff",
+  "mypy",
+  # tools/check_dist.py cannot assert a wheel contains what the docs promise without
+  # first being able to build one.
+  "build",
+]
+
+[project.urls]
+Homepage = "https://github.com/b1tninja/asn1core"
+Repository = "https://github.com/b1tninja/asn1core"
+Issues = "https://github.com/b1tninja/asn1core/issues"
+Changelog = "https://github.com/b1tninja/asn1core/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "asn1core/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["asn1core"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/asn1core/", "/tests/", "/README.md", "/PLAN.md", "/VECTORS.md", "/CHANGELOG.md", "/LICENSE", "/NOTICE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+
+[tool.coverage.run]
+branch = true
+source = ["asn1core"]
+
+[tool.coverage.report]
+# Ratcheted well above the portfolio's shell floor on purpose. A stub earns coverage for
+# the line that raises; this package is expected to be exercised, so the number must mean
+# "this behaviour is tested" rather than "this file was imported". Raise it in the commit
+# that implements a milestone, never in one that only adds tests.
+fail_under = 85
+show_missing = true
+exclude_lines = [
+  "if __name__ == .__main__.:",
+  "pragma: no cover",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "N", "UP", "SIM", "C4", "PT", "RUF", "S", "RET", "ARG"]
+ignore = [
+  "E501",  # line length is the formatter's job
+  "S101",  # assert belongs in tests, and this repo has a written policy on it
+  # N818 wants every exception named *Error. The two here are deliberately not: the package
+  # distinguishes a document that is unintelligible (DecodeError, TruncatedError) from one
+  # that is intelligible but not canonical (DerViolation), and a suffix on both would flatten
+  # exactly the distinction callers branch on. Code catches Asn1Error at the boundary and the
+  # specific class inside it; the names read as conditions, which is what they are.
+  "N818",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 in tests is the policy, and a test double has to accept parameters it ignores,
+# which ARG would otherwise flag.
+"tests/*" = ["S101", "S106", "S311", "ARG001", "ARG002"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+# strict, not the portfolio's default gate set: this module's whole job is handling bytes
+# from an adversary, and `Any` leaking through a parser is how unvalidated data gets a
+# type that implies it was validated.
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+files = ["asn1core", "tests"]
