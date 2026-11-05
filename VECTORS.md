@@ -8,7 +8,7 @@ time it meets a real certificate.
 
 ## Why these particular cases
 
-The eight defect classes measured in `PLAN.md` are all boundary cases, and boundary cases are
+The seven defect classes measured in `PLAN.md` are all boundary cases, and boundary cases are
 where a decoder that "works" in practice is wrong:
 
 | Case class | The defect it would have caught |
@@ -103,7 +103,7 @@ get checked against the ITU text or against a second independent implementation.
 | `bits-unused-nonzero` | `03 03 03 41 41` | tolerated in BER, **reject as DER** | the unused trailing bits must be zero in DER |
 | `bits-empty` | `03 00` | **reject** | a BIT STRING carries at least the unused-bits octet |
 | `oid-first-arc` | `06 01 4F` | **1.39**, accept | first content octet is `40*a + b`, and `0x4F = 79 = 40*1 + 39`, so this is iso(1) member-body(39). Note the b field tops out at 39 for a=1, which is why 79 is the last octet in that range |
-| `oid-first-arc-high` | `06 02 7F 01` | **reject under the current rule; check the edition in force** | under X.690 as commonly implemented, a first octet below 128 decodes as `a = value / 40`, `b = value % 40`, and `a = 3` is not permitted; values with `a = 2` and large `b` must instead use the `>= 80` form with continuation. The precise boundary changed between editions, so this row is a question to answer from the text, **not** an assertion to code against |
+| `oid-first-arc-high` | `06 02 7F 01` | **2.47.1, accept** | an earlier version of this row said "reject, arc 3 is illegal". **That was wrong.** X.690 8.19 uses the range 80-127 for a first arc of exactly 2, so `0x7F = 127 = 80 + 47` is `2.47`. The evidence is a CA's own bytes, not my reading: 61 of the root certificates in the local trust store encode `2.5.29.19` as `06 03 55 1D 13`, where `0x55 = 85 = 40*2 + 5`. Implementing the old row would have refused every `2.5.29.x` extension and `2.5.4.x` attribute in X.509 |
 | `oid-arc-continuation` | `06 03 2C 81 00` | accept | an arc above 127 exercises the same base-128 path as high tag numbers, so it is the same bug class as `tag-c-128` |
 | `oid-arc-nonminimal` | a subidentifier encoded `80 01` | BER accept, **DER reject** | non-minimal base-128 subidentifier |
 | `utc-ambiguity` | UTCTime `050506194000Z` | 2005, per RFC 5280 §4.1.2.5.1 | two-digit years: YY >= 50 means 19YY, otherwise 20YY - the rule lives in the RFC profile, not in X.690 |

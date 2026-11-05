@@ -42,7 +42,7 @@ files of unrelated work, so nothing here touches it).
 
 ## Defects that must be fixed, not moved
 
-Eight classes, each reproduced by execution.
+Seven classes, each reproduced by execution.
 
 | # | Defect | Measured | Basis |
 |---|---|---|---|
@@ -52,12 +52,27 @@ Eight classes, each reproduced by execution.
 | 4 | Framing is never validated | `04044141` (declares 4 content bytes, supplies 2) returns next offset **6** from a 4-byte buffer; `3006040441` returns **8** from 5; a constructed indefinite object with no EOC returns **4** from 7 | probe: `stop_octet = offset + octet_length` is never compared to the buffer, and Python slicing truncates silently, so a caller trusting the returned offset walks past the end |
 | 5 | Indefinite length terminates on *content*, not on EOC | `04 80 41 00 00 42 00 00` decodes as length **1** where the answer is **4** | probe; `buffer.index(b"\0\0")` at `object.py:164` finds the first NUL pair inside the data. Two consecutive zero bytes are everywhere - zero-padded integers, zero OID arcs, addresses - so this desyncs the whole parse rather than mis-sizing one object |
 | 6 | Original TLV bytes are unrecoverable | `02 81 01 00` decodes, then re-encodes as `02 01 00` | probe; this is the I3 blocker below |
-| 7 | Illegal OID first octet is silently repaired | `06 02 7f 01` -> **2.47.1** instead of a refusal; `06 01 4f` -> **1.39**, correct, which confirms the corpus row | probe; `min(2, octet // 40)` at `object.py:244` clamps instead of rejecting |
-| 8 | **Validation is a bare `assert`, and the fallback rewrites the value** | `ObjectIdentifier.from_string("3.0")` and `("1.41")` raise `AssertionError` in normal execution, but under **`python -O`** both are *accepted* and silently become **`2.40`** and **`2.1`** | `sdk-forge/probe_oid_assert.py`, run both ways. The worst of the eight: not a crash and not a rejection but a **different identity**, arriving quietly in exactly the optimised configuration a deployment is most likely to run |
+| 7 | **Validation is a bare `assert`, and the fallback rewrites the value** | `ObjectIdentifier.from_string("3.0")` and `("1.41")` raise `AssertionError` in normal execution, but under **`python -O`** both are *accepted* and silently become **`2.40`** and **`2.1`** | `sdk-forge/probe_oid_assert.py`, run both ways. The worst of the set: not a crash and not a rejection but a **different identity**, arriving quietly in exactly the optimised configuration a deployment is most likely to run |
+
+**A row that was here and has been withdrawn.** An earlier draft of this table listed an eighth
+defect: "illegal OID first octet silently repaired - `06 02 7F 01` should be refused, not read
+as 2.47.1", because `0x7F` implies a first arc of 3 and arcs above 2 are not permitted. That is
+**wrong**, and the evidence is in any certificate: 61 of the root certificates in the local
+trust store encode `2.5.29.19` as `06 03 55 1D 13`, and 0x55 is 85 = 40*2 + 5. X.690 8.19
+reserves the range 80-127 of the first content octet for a first arc of exactly 2, so
+`0x7F` legitimately means `2.47` and snmpy's `min(2, octet // 40)` paired with `octet - 80` is
+the *correct* rule, not a clamp into legality. Row 7 above stands on its own evidence: the
+string `3.0` really is invalid and really does become `2.40` under `-O`.
+
+Had that row been implemented as written, the DER path would have refused the first content
+octet of every `2.5.29.x` extension and every `2.5.4.x` X.500 attribute - which is to say,
+nearly every certificate in existence. It is recorded here rather than quietly edited out
+because the failure was not arithmetic, it was reasoning from a half-remembered clause about
+arc limits, and that class of error is invisible until someone checks it against real data.
 
 The first six rows are unchanged under `python -O`: the codec's `assert not (length >> 128)`
 at `object.py:143` is not load-bearing for any case the probe exercised, so the honest claim
-about it is "not demonstrated", not "harmless". **Row 8 is the opposite case and it was found
+about it is "not demonstrated", not "harmless". **Row 7 is the opposite case and it was found
 by running the probe twice.** Read together, the two say something sharper than either: an
 assert that happens to be unnecessary in one path is invisible, while an assert in another path
 is load-bearing and silently removed - so "the suite passed under `-O`" only ever proves
