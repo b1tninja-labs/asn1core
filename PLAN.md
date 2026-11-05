@@ -34,28 +34,47 @@ own name and cannot publish under it. This does not affect the extraction, which
 codec into a different and genuinely available name, but it does affect any idea of
 shipping fixes back as `snmpy` releases.
 
-The alternative to extraction is clean-room. Extraction is days; clean-room is weeks and
-would spend that time rediscovering the same four defects.
+The alternative to extraction is clean-room. That choice used to rest on a guess about how
+much of the codec would survive. It no longer does: **`sdk-forge/probe_ber.py`** runs the
+encodings from `VECTORS.md` against the real module and prints expected-versus-observed for
+32 cases (measured 2026-11-05; read-only, and snmpy is a git repository with 64 uncommitted
+files of unrelated work, so nothing here touches it).
 
 ## Defects that must be fixed, not moved
 
-All four are catalogued with file and line in the 2026-11-05 inventory.
+Seven classes, each reproduced by execution.
 
-1. **High-tag-number decoding is wrong for every tag number above 30.** `ObjectTag.decode`
-   mishandles the multi-byte 0x1F continuation, giving the wrong value and, for the
-   universal and application classes, breaking framing entirely. Boundary cases 30, 31,
-   63, 127, 128 and 16383 must each have a test. `ObjectTag.decode` has **no test
-   coverage today.**
-2. **`ObjectLength.encode` raises `OverflowError` at every exact power of 256** - 256,
-   65536, 16777216 - which a 256-byte OCTET STRING hits trivially.
-3. **Truncated input raises `IndexError`** instead of a named exception. A parser that
-   escapes as an IndexError is a parser whose bounds checks vanish.
-4. **Subclass-introspection dispatch** at `ber/object.py:492` is fragile in a way that
-   matters the moment types are added, which is the entire point of this project.
+| # | Defect | Measured | Basis |
+|---|---|---|---|
+| 1 | High-tag-number decode wrong for every tag above 30 | `9f1f`->**3999**, `9f8100`->**508032**, `9fff7f`->**524287**, `9f818000`->**65028096**. `__bytes__` encodes all four **correctly**, so encode and decode disagree and round-trip fails at 31, 63, 127, 128, 16383, 16384 | probe, and a trace of `object.py:91-98`: the shift is applied *after* the OR, and the `while ... else` whose `else` always runs re-ORs the terminal octet |
+| 2 | Length encode crashes at every exact power of 256 | `OverflowError` at 256, 65536, 16777216; 255 and 65535 are fine | probe; cause is `ceil(log2(n)/8)` at `object.py:147`, which yields `k` rather than `k+1` at `256**k`, and uses float log for an integer boundary |
+| 3 | Truncated input escapes as `IndexError` | a lone `9f` raises `IndexError`, not a domain error | probe |
+| 4 | Framing is never validated | `04044141` (declares 4 content bytes, supplies 2) returns next offset **6** from a 4-byte buffer; `3006040441` returns **8** from 5; a constructed indefinite object with no EOC returns **4** from 7 | probe: `stop_octet = offset + octet_length` is never compared to the buffer, and Python slicing truncates silently, so a caller trusting the returned offset walks past the end |
+| 5 | Indefinite length terminates on *content*, not on EOC | `04 80 41 00 00 42 00 00` decodes as length **1** where the answer is **4** | probe; `buffer.index(b"\0\0")` at `object.py:164` finds the first NUL pair inside the data. Two consecutive zero bytes are everywhere - zero-padded integers, zero OID arcs, addresses - so this desyncs the whole parse rather than mis-sizing one object |
+| 6 | Original TLV bytes are unrecoverable | `02 81 01 00` decodes, then re-encodes as `02 01 00` | probe; this is the I3 blocker below |
+| 7 | Illegal OID first octet is silently repaired | `06 02 7f 01` -> **2.47.1** instead of a refusal; `06 01 4f` -> **1.39**, correct, which confirms the corpus row | probe; `min(2, octet // 40)` at `object.py:244` clamps instead of rejecting |
 
-Numbers 2 and 3 are availability bugs in a library whose job is to survive hostile input,
-and 1 is a correctness bug that no test detects. That is the argument for extracting with
-tests first rather than extraction as a copy.
+Run under `python -O` the table is unchanged: the codec's `assert not (length >> 128)` at
+`object.py:143` is not load-bearing for any case here. It still does not license asserts for
+bounds in asn1core, but the claim is "not demonstrated", not "harmless".
+
+Three consequences that change this plan. **The compatibility surface is not the one I
+assumed:** `snmp/`, `snmpy/` and `examples/` import `ber` in **47 places across 31 files**,
+so it cannot be lifted out - snmpy keeps its copy permanently, which means fixing asn1core
+does not fix snmpy and an upstream pull request is a courtesy with a small audience rather
+than a dependency. **`ber` is not generic:** `ber/enums.py` hard-codes SMIv2 application tags
+(RFC 1902) in a package that otherwise presents itself as ASN.1, and that enum must not be
+inherited. **And my earlier claim that framing "breaks entirely for the universal and
+application classes" was reasoning, not measurement:** what is demonstrated is wrong tag
+values above 30 in every class, plus the framing failures in rows 4 and 5.
+
+So extraction is not "copy 674 lines and patch four spots". The tag decoder, length encoder,
+indefinite-length handling, framing checks and OID arc validation all get rewritten, and
+raw-byte retention is added to every node. What actually transfers is the **shape**: the
+`Object` / `ObjectTag` / `ObjectLength` decomposition, the value-class hierarchy, the file
+boundary, and snmpy's 6 existing tests as a regression floor. The honest form of the decision
+is therefore *extract the architecture, write the behaviour from the corpus* - cheaper than
+clean-room, and clear about what is inherited.
 
 ## The one property that cannot be inherited
 
