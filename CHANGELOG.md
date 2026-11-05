@@ -12,8 +12,9 @@ Nothing published. This package exists on disk and nowhere else.
 
 - The codec: `tag.py`, `length.py`, `node.py`, `der.py`, written from `VECTORS.md` rather than
   ported. 87 tests pass at 91% coverage under pytest, under pytest with assertions stripped,
-  under ruff and under mypy strict. Six of nineteen obligations remain open and `dk.oid` is one
-  of them, so **defect 7 in the inventory in PLAN.md is still unfixed in this package.**
+  under ruff and under mypy strict. Thirteen of the twenty obligations in `PLAN.md` are closed
+  with a named test; five remain unimplemented and two are partial, `dk.oid` among them, so
+  **defect 7 in the inventory in PLAN.md is still unfixed in this package.**
 - `tools/crosscheck_store.py` - the second opinion the corpus owed. Parses the local X.509
   trust store and requires byte-exact DER round-tripping: 75 certificates, 868,500 bytes, zero
   failures on 2026-11-05. Those documents exercise canonical framing only; they carry no tag
