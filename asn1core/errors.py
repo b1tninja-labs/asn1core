@@ -50,6 +50,16 @@ class DepthExceeded(DecodeError):
     """
 
 
+class CertificateError(DecodeError):
+    """Well-formed ASN.1, but not the structure RFC 5280 describes.
+
+    Kept distinct from `DerViolation`, which means "legal BER, forbidden spelling", and from
+    `TruncatedError`, which means "the buffer ran out". A project caching keys by public key
+    needs all three apart: one is a document to reject, one is a document to store as-is, and
+    one is an attack to log.
+    """
+
+
 class DerViolation(Asn1Error):
     """Legal BER that DER forbids: non-minimal length or integer, indefinite length,
     non-zero unused bits, an out-of-order SET OF, and so on.

@@ -37,6 +37,23 @@ validate_der(raw)                          # assert a document is already canoni
 assert encode_der(node) == node.raw        # canonical input round-trips byte-for-byte
 ```
 
+The layer above the codec returns the same kind of answer - slices, not reconstructions:
+
+```python
+from asn1core import certificate_parts, spki_sha256
+
+parts = certificate_parts(cert_der)        # raises CertificateError if it isn't one
+parts.tbs_certificate                      # stored TLV: what the CA signature covers
+parts.signature_algorithm                  # stored TLV
+parts.signature_value                      # key octets, unused-bits octet removed
+parts.subject_public_key_info              # stored TLV: what a pin is computed from
+spki_sha256(cert_der)                      # hex digest of exactly those bytes
+```
+
+`tbsCertificate` opens with `version [0] EXPLICIT INTEGER DEFAULT v1`, so a v1 certificate omits
+it and every field shifts. The walk skips that slot by tag, never by index: `root-rsa.der` in
+`tests/fixtures/` is a real shipped root certificate that depends on this.
+
 Unknown tags survive decode-encode verbatim. Certificate extensions are the whole reason
 this library is needed, and a codec that drops what it does not recognise defeats the point.
 

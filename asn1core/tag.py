@@ -74,6 +74,16 @@ class Tag:
     def is_universal(self) -> bool:
         return self.tag_class is TagClass.universal
 
+    def is_context(self, number: int) -> bool:
+        """True for the context-specific tag with this number - the shape `[0]` takes.
+
+        Structure work needs this constantly: an X.509 version is `[0] EXPLICIT`, an issuer
+        unique id is `[1]`, extensions are `[3]`. Comparing whole `Tag` values would also pin
+        the constructed bit, which for an EXPLICIT tag is part of the grammar but for an IMPLICIT
+        one is a modelling choice, so the class and number are the useful question.
+        """
+        return self.tag_class is TagClass.context and self.number == number
+
 
 def encode_tag(tag: Tag) -> bytes:
     """DER identifier octets for ``tag``.

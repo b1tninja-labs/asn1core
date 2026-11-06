@@ -147,6 +147,29 @@ For each fixture: verify the signature against the **stored original bytes**. If
 signature only verifies after re-serialisation, then the fixture, the encoder, or the parser
 is broken - and RFC 5280 §4.1.3.2 says which of those is disqualifying.
 
+### What is in the repo today
+
+Two real trust-store roots are vendored under `tests/fixtures/`, copied and hashed by
+`sdk-forge/probe_fixture_facts.py`. They are not the three fixtures above - they carry no
+multi-valued RDN set, no ECDSA signature with a padded `r`, and no CRL entry - but they are
+genuine issued documents, and one of them earns its place for a specific reason:
+
+| File | Bytes | SHA-256 | Why this one |
+|---|---|---|---|
+| `root-ecdsa.der` | 538 | `26c56ad2208d1e9b152f66853bf4797cbeb7552c1f3f477251e8cb1ae7e797bf` | ECDSA-P384, `version [0]` **present** (v3), SPKI 120 bytes |
+| `root-rsa.der` | 576 | `e7685634efacf69ace939a6b255b7b4fabef42935b50a265acb5cb6027e44e70` | **no version field at all** - a v1 certificate, so every `TBSCertificate` child sits one position earlier than a v3 document. The naive `children[6]` read returns the wrong object on this shipped, real input |
+
+The store itself supplies 75 documents for `tools/crosscheck_x509.py`, which is where the
+structural claims get checked against something that is not this code.
+
+**One fact the store volunteered.** A root in the local machine store carries a serial number
+that is not positive, which RFC 5280 §4.1.2.2 forbids; `cryptography` warns that it will refuse
+to load that certificate in a future release. This package parses it without complaint on
+purpose: serial-number *semantics* are a profile-level validation, not an encoding one, and a
+codec that quietly rejects an input cannot be used to inventory the things already in
+circulation. Whoever validates certificates is the layer that should raise - and now has the
+bytes to raise about.
+
 ## Rules for whoever builds it
 
 - **Every case carries both a positive and a negative assertion.** A test that only proves

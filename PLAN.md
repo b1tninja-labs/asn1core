@@ -152,7 +152,7 @@ rot, and it carries no meaning.
 | `dk.oid` | X.690 section 8.19 | [x] | `oid.py`, wired into `node._der_value_check` for tag 6 | `tests/test_oid_corpus.py`: the 13 corpus vectors encode and decode byte-exactly, `3.0` and `1.41` raise rather than becoming `2.40` under `-O`, and `test_library_contains_no_assert_statements` keeps it that way. **Closed 2026-11-05**; the 75-certificate trust-store cross-check passes with the OID check active, which is the second opinion that the retracted first-arc rule never got |
 | `dk.time` | RFC 5280 section 4.1.2.5.1 | [ ] | not written | UTCTime epoch rule and the 2049 boundary |
 | `dk.name` | RFC 5280 section 4.1.2.4 | [ ] | not written | RDN handling, needs the SET OF fixture |
-| `dk.spki` | RFC 5280 section 4.1.2.7 | [ ] | not written | the hash the nine dependent projects key on |
+| `dk.spki` | RFC 5280 section 4.1.2.7 | [x] | `x509.py` | `tests/test_x509_corpus.py` (two vendored roots, digests frozen from `cryptography`) plus `tools/crosscheck_x509.py`: **75 trust-store certificates, `tbsCertificate` and `signatureValue` byte-identical to `cryptography` on every one, SPKI identical on the 74 it can serialise, zero failures** (2026-11-05). One root's key material `cryptography` cannot re-serialise at all, which is recorded rather than hidden |
 | `dk.cert` | RFC 5280 sections 4.1-4.1.12 | [ ] | not written | blocked on the three end-to-end fixtures |
 | `dk.corpus` | `VECTORS.md` | partial | `tests/` | 87 tests pass; every `[verify against X.690]` row is still open |
 
