@@ -159,18 +159,23 @@ is broken - and RFC 5280 §4.1.3.2 says which of those is disqualifying.
 
 ### What is in the repo today
 
-Two real trust-store roots are vendored under `tests/fixtures/`, copied and hashed by
-`sdk-forge/probe_fixture_facts.py`. They are not the three fixtures above - they carry no
-multi-valued RDN set, no ECDSA signature with a padded `r`, and no CRL entry - but they are
-genuine issued documents, and one of them earns its place for a specific reason:
+Two real trust-store roots, one generated multi-valued-RDN certificate, and the two documents
+fixtures 2 and 3 asked for are vendored under `tests/fixtures/`:
 
 | File | Bytes | SHA-256 | Why this one |
 |---|---|---|---|
 | `root-ecdsa.der` | 538 | `26c56ad2208d1e9b152f66853bf4797cbeb7552c1f3f477251e8cb1ae7e797bf` | ECDSA-P384, `version [0]` **present** (v3), SPKI 120 bytes |
 | `root-rsa.der` | 576 | `e7685634efacf69ace939a6b255b7b4fabef42935b50a265acb5cb6027e44e70` | **no version field at all** - a v1 certificate, so every `TBSCertificate` child sits one position earlier than a v3 document. The naive `children[6]` read returns the wrong object on this shipped, real input |
-| `multivalue-rdn.der` | 1057 | *not pinned* | **generated**, by `sdk-forge/probe_name_fixture.py`: multi-valued RDN, mixed UTF8String, TeletexString and IA5String, padded and doubled-space values, and an attribute type with no RFC 4514 short name. Its digest is deliberately not pinned because the generator makes a fresh key each run; what is pinned is the name |
+| `multivalue-rdn.der` | 1057 | *not pinned* | **generated**, by `sdk-forge/probe_name_fixture.py`: multi-valued RDN, mixed UTF8String, TeletexString and IA5String, padded and doubled-space values, and an attribute type with no RFC 4514 short name |
+| `ecdsa-padded-r.der` | 388 | *not pinned* | **generated**, by `sdk-forge/probe_sig_fixture.py`: fixture 2. ECDSA-P256 where `r` is 33 octets (leading `00`) and `s` is 32 (no padding) |
+| `crl-keycompromise.der` | 267 | *not pinned* | **generated**: fixture 3. Two revoked entries - one `crlReason` keyCompromise, one with no reason extension at all - plus the list's own `[0]` extensions, a `nextUpdate`, and a version field reading **1** because `Version` counts from `v1(0)` |
 
-Fixture 1 above asked for multi-valued RDNs and mixed PrintableString and UTF8String. The RDN
+None of the three generated fixtures pins a digest. Each generator makes a fresh key or a fresh
+signature - the ECDSA nonces in this build were measured to be non-deterministic, which is why the
+claim is "reproducible in shape" and not "reproducible in bytes". What the tests pin is structure,
+which is what the fixtures exist to demonstrate.
+
+Fixture 1 asked for multi-valued RDNs and mixed PrintableString and UTF8String. The RDN
 shape is covered; the PrintableString half is not, and cannot be from this generator - asked to
 encode `C=FR`, cryptography chose TeletexString, exactly as 520 of the store's 577 attribute values
 did. PrintableString is therefore exercised through hand-built TLVs rather than through a document,
@@ -178,6 +183,14 @@ and the character-set question is left open as `dk.printable-charset` instead of
 
 The store itself supplies 75 documents for `tools/crosscheck_x509.py`, which is where the
 structural claims get checked against something that is not this code.
+
+**The signature check this table was built to support.** Of those 75 certificates, 67 are
+self-issued and verifiable on this machine, and **all 67 verify their CA signature over the
+`tbsCertificate` slice this package hands back** - 0 failures. The 8 that do not are skipped with a
+reason printed rather than counted as passes: 6 are cross-certificates (a root issued by a
+different CA, so its own subject key cannot verify it), 1 is signed with MD2, which the bindings
+refuse, and 1 carries a key the bindings cannot read. The generated CRL is verified the same way,
+against the fixture CA's key, over asn1core's own `tbsCertList` slice.
 
 **One fact the store volunteered.** A root in the local machine store carries a serial number
 that is not positive, which RFC 5280 §4.1.2.2 forbids; `cryptography` warns that it will refuse

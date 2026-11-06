@@ -70,6 +70,31 @@ validity_encoding_issue(cert_der)    # §4.1.2.5 says a CA should have used UTCT
 store - Certum Trusted Network CA 2 - spells its 2011 `notBefore` as GeneralizedTime. A decoder
 that refused it would be wrong about the certificate and useless for the trust store.
 
+One level up, the contents of a document, with the bytes still attached:
+
+```python
+from asn1core import parse_certificate, parse_crl
+
+cert = parse_certificate(cert_der)
+cert.serial                            # int; a non-positive one is parsed, not rejected
+cert.version                           # 2 means v3; absent means v1, which is 0
+cert.issuer == cert.subject            # Name equality, §7.1
+cert.validity.not_after                # aware datetime
+cert.extension("2.5.29.19").value      # the extension's OCTET STRING content, unparsed
+cert.unrecognised_critical             # §4.2 says these cannot be ignored; deciding is pkix's job
+cert.tbs_certificate                   # still the stored TLV, still what the signature covers
+
+crl = parse_crl(crl_der)
+crl.next_update                        # None when absent, which means something
+crl.revoked[0].reason                  # 1 == keyCompromise; None means unspecified(0)
+crl.revoked[0].compromised             # §6.1.4 applies to keyCompromise and cACompromise only
+```
+
+Fields are located by tag, never by index: `TBSCertificate` puts optional `issuerUniqueID [1]` and
+`subjectUniqueID [2]` ahead of the extensions, and a CRL's `nextUpdate` and `revokedCertificates`
+are both optional. A CRL's version also reads 1 where you might expect 2, because `Version` counts
+from `v1(0)`.
+
 Unknown tags survive decode-encode verbatim. Certificate extensions are the whole reason
 this library is needed, and a codec that drops what it does not recognise defeats the point.
 
@@ -85,7 +110,20 @@ silently becomes `2.40`. Here it is a real check, and `2.5.29.19` - most of X.50
 
 ## Not yet implemented
 
-The value types beyond what the corpus needs, UTCTime and GeneralizedTime semantics, RDN/Name and
-SubjectPublicKeyInfo handling, the three end-to-end X.509 fixtures in `VECTORS.md`, and any form
-of general-purpose schema or `.asn` compilation. OID content parsing exists now, and those are the
-layers that were waiting on it. `PLAN.md` records which of these gate Wave 1.
+Time, distinguished names, certificate and CRL structure, and the three end-to-end X.509 fixtures
+in `VECTORS.md` are done. What is not:
+
+- **RFC 4518 StringPrep in full.** Case folding, NFC, §2.6.1 space handling and the §7.1 matching
+  rules are implemented; the Appendix A mapping tables, the prohibited-character set and the
+  bidirectional checks are not. The subset is named in `name.py`'s docstring rather than called
+  StringPrep, because claiming the whole name for part of the work is how a codec ends up deciding
+  equality wrongly for input nobody tested.
+- **PrintableString's restricted alphabet** (X.680 §40.4). Nothing in the store exercises it - zero
+  PrintableStrings in 577 attribute values - and the defining text is not in the RFC library, so
+  the check waits for the real alphabet instead of a guess that would reject shipped certificates.
+- **Extension semantics and path validation.** This package reads an extension's payload and lists
+  the unrecognised critical ones; interpreting them and applying RFC 5280 §6 is `pkix`'s job.
+- The value types beyond what the corpus needs, and any form of general-purpose schema or `.asn`
+  compilation.
+
+`PLAN.md` records which of these gate Wave 1.

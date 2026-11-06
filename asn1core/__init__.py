@@ -15,6 +15,8 @@ and, more importantly, what is not.
 
 from __future__ import annotations
 
+from .cert import Certificate, Extension, parse_certificate, parse_extensions
+from .crl import Crl, Revoked, parse_crl
 from .der import check_bit_string, check_boolean, check_integer, check_set_of, validate_der
 from .errors import (
     Asn1Error,
@@ -49,10 +51,12 @@ from .time import (
 )
 from .x509 import (
     CertificateParts,
+    SignedDocument,
     Validity,
     certificate_parts,
     issuer,
     signature_algorithm,
+    signed_document_parts,
     spki_sha256,
     subject,
     subject_public_key_info,
@@ -76,13 +80,18 @@ __all__ = [
     "UTC_TIME_FLOOR_YEAR",
     "Asn1Error",
     "Attribute",
+    "Certificate",
     "CertificateError",
     "CertificateParts",
+    "Crl",
     "DecodeError",
     "DepthExceeded",
     "DerViolation",
+    "Extension",
     "Name",
     "Node",
+    "Revoked",
+    "SignedDocument",
     "Tag",
     "TagClass",
     "TruncatedError",
@@ -109,9 +118,13 @@ __all__ = [
     "issuer",
     "names_equal",
     "normalize_value",
+    "parse_certificate",
+    "parse_crl",
+    "parse_extensions",
     "parse_name",
     "parse_oid_string",
     "signature_algorithm",
+    "signed_document_parts",
     "spki_sha256",
     "subject",
     "subject_public_key_info",

@@ -91,6 +91,73 @@ class CertificateParts:
     version: int | None
 
 
+@dataclass(frozen=True, slots=True)
+class SignedDocument:
+    """The outer shape X.509 reuses: `SEQUENCE { to-be-signed, AlgorithmIdentifier, BIT STRING }`.
+
+    `Certificate` and `CertificateList` are both written this way, so slicing off the signed region
+    and the signature needs no knowledge of which one is being read. `to_be_signed` carries the
+    generic name for exactly that reason: `certificate_parts` knows the first field as
+    tbsCertificate and a CRL knows it as tbsCertList, and the checks here care about neither.
+
+    ``tbs`` is the parsed node, not just its bytes, so a caller can walk its own grammar without
+    decoding the same object twice.
+    """
+
+    raw: bytes
+    to_be_signed: bytes
+    signature_algorithm: bytes
+    signature_value: bytes
+    tbs: Node
+
+
+def signed_document_parts(
+    buffer: bytes, *, der: bool = True, label: str = "document"
+) -> SignedDocument:
+    """Split any X.509 signed document into the signed region, the algorithm, and the signature.
+
+    The signature's unused-bits octet is stripped on the way out. A signature is always whole
+    octets, so a non-zero count means the document is not what it claims to be - and returning it
+    verbatim would prepend a zero byte to every signature and make verification fail in a way that
+    reads like a bad key rather than a bad parse.
+
+    Raises:
+        CertificateError: the outer shape is wrong, or trailing bytes follow the document.
+    """
+    node, end = decode(buffer, der=der)
+    if end != len(buffer):
+        raise CertificateError(
+            f"{len(buffer) - end} byte(s) follow the {label}; a document is one object"
+        )
+    if node.tag != _SEQUENCE:
+        raise CertificateError(f"a {label} is a SEQUENCE, found tag {node.tag!r}")
+    if len(node.children) != 3:
+        raise CertificateError(f"a {label} has three fields, found {len(node.children)}")
+
+    tbs, algorithm, signature = node.children
+    if tbs.tag != _SEQUENCE:
+        raise CertificateError(f"the signed region is a SEQUENCE, found tag {tbs.tag!r}")
+    if algorithm.tag != _SEQUENCE:
+        raise CertificateError(f"signatureAlgorithm is a SEQUENCE, found tag {algorithm.tag!r}")
+    if signature.tag != _BIT_STRING:
+        raise CertificateError(f"signatureValue is a BIT STRING, found tag {signature.tag!r}")
+    content = signature.payload
+    if not content:
+        raise CertificateError("signatureValue is an empty BIT STRING")
+    if content[0] != 0:
+        raise CertificateError(
+            f"signatureValue declares {content[0]} unused bits; a signature is whole octets"
+        )
+
+    return SignedDocument(
+        raw=buffer[:end],
+        to_be_signed=tbs.raw,
+        signature_algorithm=algorithm.raw,
+        signature_value=content[1:],
+        tbs=tbs,
+    )
+
+
 def certificate_parts(buffer: bytes, *, der: bool = True) -> CertificateParts:
     """Split a certificate into the four things consumers key and verify on.
 
@@ -106,21 +173,9 @@ def certificate_parts(buffer: bytes, *, der: bool = True) -> CertificateParts:
         TruncatedError, DecodeError: from the codec, for framing and encoding faults.
         DerViolation: legal BER presented on the DER path.
     """
-    node, end = decode(buffer, der=der)
-    if end != len(buffer):
-        raise CertificateError(
-            f"{len(buffer) - end} byte(s) follow the certificate; a document is one object"
-        )
-    if node.tag != _SEQUENCE:
-        raise CertificateError(f"a certificate is a SEQUENCE, found tag {node.tag!r}")
-    if len(node.children) != 3:
-        raise CertificateError(f"a certificate has three fields, found {len(node.children)}")
+    document = signed_document_parts(buffer, der=der, label="certificate")
 
-    tbs, algorithm, signature = node.children
-    if tbs.tag != _SEQUENCE:
-        raise CertificateError(f"tbsCertificate is a SEQUENCE, found tag {tbs.tag!r}")
-
-    fields = list(tbs.children)
+    fields = list(document.tbs.children)
     version: int | None = None
     if fields and fields[0].tag.is_context(0):
         version = _read_version(fields.pop(0))
@@ -134,23 +189,11 @@ def certificate_parts(buffer: bytes, *, der: bool = True) -> CertificateParts:
         if field.tag != expected:
             raise CertificateError(f"{name} should carry tag {expected!r}, found {field.tag!r}")
 
-    if algorithm.tag != _SEQUENCE:
-        raise CertificateError(f"signatureAlgorithm is a SEQUENCE, found tag {algorithm.tag!r}")
-    if signature.tag != _BIT_STRING:
-        raise CertificateError(f"signatureValue is a BIT STRING, found tag {signature.tag!r}")
-    content = signature.payload
-    if not content:
-        raise CertificateError("signatureValue is an empty BIT STRING")
-    if content[0] != 0:
-        raise CertificateError(
-            f"signatureValue declares {content[0]} unused bits; a signature is whole octets"
-        )
-
     return CertificateParts(
-        raw=buffer[:end],
-        tbs_certificate=tbs.raw,
-        signature_algorithm=algorithm.raw,
-        signature_value=content[1:],
+        raw=document.raw,
+        tbs_certificate=document.to_be_signed,
+        signature_algorithm=document.signature_algorithm,
+        signature_value=document.signature_value,
         subject_public_key_info=fields[len(_TBS_FIELDS) - 1].raw,
         validity=fields[3].raw,  # serialNumber, signature, issuer, validity
         issuer=fields[2].raw,
