@@ -26,6 +26,7 @@ from .errors import DecodeError, DepthExceeded, DerViolation, TruncatedError
 from .length import INDEFINITE, check_length_canonical, decode_length, encode_length
 from .oid import check_oid
 from .tag import Tag, decode_tag, encode_tag
+from .time import check_generalized_time, check_utc_time
 
 __all__ = ["MAX_DEPTH", "Node", "decode", "encode_der"]
 
@@ -257,5 +258,13 @@ def _der_value_check(tag: Tag, payload: bytes, node: Node, *, offset: int) -> No
         # meaning, and a spelling a peer reads as a different OID is an identity substitution
         # rather than a formatting difference.
         check_oid(payload, offset=offset)
+    elif tag.number == 23:
+        # utc-time-canonical. Value-level and DER-path only: the 11-octet minute-precision form
+        # is legal BER and legal ASN.1, and a tolerant decode must keep those octets rather than
+        # decide what year they mean.
+        check_utc_time(payload, offset=offset)
+    elif tag.number == 24:
+        # general-time-canonical: century present, seconds present, no fractional part.
+        check_generalized_time(payload, offset=offset)
     elif tag.number == 17:
         check_set_of(node)

@@ -23,25 +23,32 @@ SHA-256 helper below is an identifier, not a security check.
 
 from __future__ import annotations
 
+import datetime
 import hashlib
 from dataclasses import dataclass
 
 from .errors import CertificateError
 from .node import Node, decode
 from .tag import Tag, TagClass
+from .time import UTC_TIME_CEILING_YEAR, UTC_TIME_FLOOR_YEAR, check_generalized_time, check_utc_time
 
 __all__ = [
     "CertificateParts",
+    "Validity",
     "certificate_parts",
     "signature_algorithm",
     "spki_sha256",
     "subject_public_key_info",
     "tbs_certificate",
+    "validity",
+    "validity_encoding_issue",
 ]
 
 _SEQUENCE = Tag(16, True, TagClass.universal)
 _INTEGER = Tag(2, False, TagClass.universal)
 _BIT_STRING = Tag(3, False, TagClass.universal)
+_UTC_TIME = Tag(23, False, TagClass.universal)
+_GENERALIZED_TIME = Tag(24, False, TagClass.universal)
 
 # RFC 5280 §4.1.2.1 defines v1, v2 and v3. A v4 document is not "newer than this library": the
 # fields below it may mean something else, so guessing at its structure is refused.
@@ -75,6 +82,7 @@ class CertificateParts:
     signature_algorithm: bytes
     signature_value: bytes
     subject_public_key_info: bytes
+    validity: bytes
     version: int | None
 
 
@@ -139,6 +147,7 @@ def certificate_parts(buffer: bytes, *, der: bool = True) -> CertificateParts:
         signature_algorithm=algorithm.raw,
         signature_value=content[1:],
         subject_public_key_info=fields[len(_TBS_FIELDS) - 1].raw,
+        validity=fields[3].raw,  # serialNumber, signature, issuer, validity
         version=version,
     )
 
@@ -182,3 +191,84 @@ def spki_sha256(buffer: bytes, *, der: bool = True) -> str:
     canonical, and one key occupying two pins is the bug this package exists to prevent.
     """
     return hashlib.sha256(subject_public_key_info(buffer, der=der)).hexdigest()
+
+
+@dataclass(frozen=True, slots=True)
+class Validity:
+    """The validity window, plus the TLVs that carried it.
+
+    The raw forms travel alongside the instants because a verifier that re-encodes a certificate
+    to compare dates would be comparing bytes no CA signed - and because a date that arrives as
+    GeneralizedTime when the profile expects UTCTime is only visible if the spelling is kept.
+    """
+
+    not_before: datetime.datetime
+    not_after: datetime.datetime
+    raw: bytes
+    not_before_raw: bytes
+    not_after_raw: bytes
+
+
+def validity(buffer: bytes, *, der: bool = True) -> Validity:
+    """Read the two dates a certificate is valid between, from the stored TLVs."""
+    parts, low, high = _validity_nodes(buffer, der=der)
+    return Validity(
+        not_before=_time_of(low),
+        not_after=_time_of(high),
+        raw=parts.validity,
+        not_before_raw=low.raw,
+        not_after_raw=high.raw,
+    )
+
+
+def validity_encoding_issue(buffer: bytes, *, der: bool = True) -> str | None:
+    """Whether the window is spelled the way §4.1.2.5 tells a CA to spell it, or None.
+
+    The rule reads: "CAs conforming to this profile MUST always encode certificate validity dates
+    through the year 2049 as UTCTime; certificate validity dates in 2050 or later MUST be encoded
+    as GeneralizedTime." It constrains issuance, not decoding, so it is answered here as a
+    description rather than raised as an error - the choice that the retracted OID row would have
+    forced the other way, and a decoder that rejects documents real CAs have issued is worse than
+    useless.
+
+    Only one direction can fire. UTCTime cannot express a year outside 1950-2049 once §4.1.2.5.1
+    is applied, so "UTCTime where GeneralizedTime is required" has no encoding; and a year before
+    1950 has no UTCTime spelling either, so a GeneralizedTime there is the only option available
+    and not a violation.
+    """
+    _document, low, high = _validity_nodes(buffer, der=der)
+    for label, node in (("notBefore", low), ("notAfter", high)):
+        if node.tag != _GENERALIZED_TIME:
+            continue
+        year = _time_of(node).year
+        if UTC_TIME_FLOOR_YEAR <= year <= UTC_TIME_CEILING_YEAR:
+            return (
+                f"{label} is GeneralizedTime for {year:04d}; §4.1.2.5 requires UTCTime for "
+                f"validity dates through {UTC_TIME_CEILING_YEAR}"
+            )
+    return None
+
+
+def _validity_nodes(buffer: bytes, *, der: bool) -> tuple[CertificateParts, Node, Node]:
+    """The certificate, and the two children of its Validity SEQUENCE."""
+    parts = certificate_parts(buffer, der=der)
+    node, end = decode(parts.validity, der=der)
+    if node.tag != _SEQUENCE or end != len(parts.validity):
+        raise CertificateError(f"Validity is a SEQUENCE of two times, found tag {node.tag!r}")
+    if len(node.children) != 2:
+        raise CertificateError(f"Validity has two fields, found {len(node.children)}")
+    low, high = node.children
+    return parts, low, high
+
+
+def _time_of(node: Node) -> datetime.datetime:
+    for tag, check, name in (
+        (_UTC_TIME, check_utc_time, "UTCTime"),
+        (_GENERALIZED_TIME, check_generalized_time, "GeneralizedTime"),
+    ):
+        if node.tag == tag:
+            content = node.payload
+            if content is None:
+                raise CertificateError(f"{name} carries no content octets")
+            return check(content)
+    raise CertificateError(f"Validity holds a UTCTime or GeneralizedTime, found tag {node.tag!r}")

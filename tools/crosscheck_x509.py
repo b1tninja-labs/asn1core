@@ -29,7 +29,12 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from asn1core import Asn1Error, certificate_parts  # noqa: E402
+from asn1core import (  # noqa: E402
+    Asn1Error,
+    certificate_parts,
+    validity,
+    validity_encoding_issue,
+)
 
 STORES = ("Cert:\\LocalMachine\\Root", "Cert:\\LocalMachine\\CA", "Cert:\\CurrentUser\\Root")
 
@@ -79,6 +84,9 @@ def main() -> int:
     spki_agreed = 0
     spki_reencode = []
     spki_unreadable = 0
+    time_agreed = 0
+    time_refused = []
+    profile_issues = []
 
     for path in paths:
         der = path.read_bytes()
@@ -115,6 +123,29 @@ def main() -> int:
             )
             failures += 1
 
+        # The dates. Two things are measured here, and the second one is the reason this block
+        # exists: strictness that a shipped trust anchor trips would be the OID first-arc mistake
+        # all over again, so a refusal on real input is reported for judgement, not celebrated.
+        try:
+            window = validity(der)
+            issue = validity_encoding_issue(der)
+        except Asn1Error as exc:
+            time_refused.append((path.name[:24], f"{type(exc).__name__}: {exc}"))
+        else:
+            if issue is not None:
+                profile_issues.append((path.name[:24], issue))
+            if (
+                window.not_before == other.not_valid_before_utc
+                and window.not_after == other.not_valid_after_utc
+            ):
+                time_agreed += 1
+            else:
+                print(
+                    f"  FAIL {path.name[:24]}: validity {window.not_before!r}..{window.not_after!r} "
+                    f"vs cryptography {other.not_valid_before_utc!r}..{other.not_valid_after_utc!r}"
+                )
+                failures += 1
+
         try:
             theirs = other.public_key().public_bytes(
                 Encoding.DER, PublicFormat.SubjectPublicKeyInfo
@@ -135,8 +166,17 @@ def main() -> int:
         f"spki re-encoded differently={len(spki_reencode)}, "
         f"spki unreadable-by-cryptography={spki_unreadable}"
     )
+    print(
+        f"validity dates agreed with cryptography={time_agreed}, "
+        f"refused by the strict time reader={len(time_refused)}, "
+        f"spelled against §4.1.2.5={len(profile_issues)}"
+    )
     for name, ours, theirs_len in spki_reencode[:10]:
         print(f"  differs: {name} ours={theirs_len} theirs={ours}")
+    for name, why in time_refused[:10]:
+        print(f"  time refused: {name} :: {why}")
+    for name, why in profile_issues[:10]:
+        print(f"  profile: {name} :: {why}")
     print(f"failures={failures}")
     return 1 if failures else 0
 

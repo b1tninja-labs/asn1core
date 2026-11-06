@@ -54,6 +54,20 @@ spki_sha256(cert_der)                      # hex digest of exactly those bytes
 it and every field shifts. The walk skips that slot by tag, never by index: `root-rsa.der` in
 `tests/fixtures/` is a real shipped root certificate that depends on this.
 
+Dates are read the way RFC 5280 says, and the profile's production rules are reported rather than
+enforced:
+
+```python
+from asn1core import validity, validity_encoding_issue
+
+validity(cert_der).not_before          # aware datetime: "960129000000Z" is 1996, §4.1.2.5.1
+validity_encoding_issue(cert_der)      # §4.1.2.5 says a CA should have used UTCTime here
+```
+
+`validity_encoding_issue` answers rather than raises because one of the roots in a live trust
+store - Certum Trusted Network CA 2 - spells its 2011 `notBefore` as GeneralizedTime. A decoder
+that refused it would be wrong about the certificate and useless for the trust store.
+
 Unknown tags survive decode-encode verbatim. Certificate extensions are the whole reason
 this library is needed, and a codec that drops what it does not recognise defeats the point.
 
