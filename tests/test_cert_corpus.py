@@ -26,8 +26,10 @@ from pathlib import Path
 import pytest
 
 from asn1core import (
+    Certificate,
     CertificateError,
     DerViolation,
+    Node,
     decode,
     decode_length,
     decode_tag,
@@ -134,7 +136,18 @@ def tbs_children(der: bytes) -> list[bytes]:
     return [child.raw for child in node.children]
 
 
-def rebuild(children: list[bytes], cert) -> bytes:
+def payload_of(node: Node) -> bytes:
+    """A primitive node's content, narrowed from `bytes | None`.
+
+    A helper rather than `assert node.payload is not None` because this suite also runs under `python -O`, where
+    asserts are stripped and a None would sail through into a TypeError several statements later.
+    """
+    if node.payload is None:
+        raise AssertionError(f"{node.tag} node is constructed and has no primitive payload")
+    return node.payload
+
+
+def rebuild(children: list[bytes], cert: Certificate) -> bytes:
     return seq(
         seq(*children),
         cert.signature_algorithm_raw,
@@ -151,10 +164,11 @@ def test_padded_r_survives_the_codec() -> None:
     assert end == len(cert.signature_value)
     r, s = sequence.children
 
-    assert len(r.payload) == 33
-    assert r.payload[0] == 0x00
-    assert len(s.payload) == 32
-    assert s.payload[0] != 0x00
+    r_bytes, s_bytes = payload_of(r), payload_of(s)
+    assert len(r_bytes) == 33
+    assert r_bytes[0] == 0x00
+    assert len(s_bytes) == 32
+    assert s_bytes[0] != 0x00
     # The bytes handed to a verifier are the document's own, byte for byte.
     assert sequence.raw == cert.signature_value
 
@@ -164,8 +178,9 @@ def test_stripping_the_padding_would_change_the_number_not_just_its_length() -> 
     cert = parse_certificate(fixture("ecdsa-padded-r.der"))
     sequence, _ = decode(cert.signature_value, der=True)
     r = sequence.children[0]
-    padded = int.from_bytes(r.payload, "big", signed=True)
-    stripped = int.from_bytes(r.payload[1:], "big", signed=True)
+    r_bytes = payload_of(r)
+    padded = int.from_bytes(r_bytes, "big", signed=True)
+    stripped = int.from_bytes(r_bytes[1:], "big", signed=True)
 
     assert padded > 0
     assert stripped < 0, "the payload starts at or above 0x80, so unpadded it reads as negative"
@@ -298,7 +313,7 @@ def test_crl_extensions_sit_behind_a_zero_tag_and_entries_do_not() -> None:
     value, end = decode(crl.extensions[0].value, der=True)
     assert end == len(crl.extensions[0].value)
     assert value.tag.number == 2
-    assert int.from_bytes(value.payload, "big") == 7
+    assert int.from_bytes(payload_of(value), "big") == 7
 
     node, _ = decode(crl.tbs_cert_list, der=True)
     assert node.children[-1].tag.is_context(0), "the last signed field is the tagged slot"
