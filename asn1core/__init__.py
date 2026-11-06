@@ -24,6 +24,7 @@ from .errors import (
     DecodeError,
     DepthExceeded,
     DerViolation,
+    StringPrepError,
     TruncatedError,
 )
 from .length import INDEFINITE, MAX_CONTENT_BYTES, decode_length, encode_length
@@ -38,6 +39,13 @@ from .name import (
 )
 from .node import MAX_DEPTH, Node, decode, encode_der
 from .oid import MAX_ARC_VALUE, MAX_OID_ARCS, check_oid, decode_oid, encode_oid, parse_oid_string
+from .stringprep import (
+    insignificant_space,
+    map_characters,
+    preparation_issues,
+    prepare_value,
+    prohibited_characters,
+)
 from .tag import MAX_TAG_NUMBER, Tag, TagClass, decode_tag, encode_tag
 from .time import (
     NO_EXPIRATION,
@@ -92,6 +100,7 @@ __all__ = [
     "Node",
     "Revoked",
     "SignedDocument",
+    "StringPrepError",
     "Tag",
     "TagClass",
     "TruncatedError",
@@ -115,7 +124,9 @@ __all__ = [
     "encode_oid",
     "encode_tag",
     "encode_utc_time",
+    "insignificant_space",
     "issuer",
+    "map_characters",
     "names_equal",
     "normalize_value",
     "parse_certificate",
@@ -123,6 +134,9 @@ __all__ = [
     "parse_extensions",
     "parse_name",
     "parse_oid_string",
+    "preparation_issues",
+    "prepare_value",
+    "prohibited_characters",
     "signature_algorithm",
     "signed_document_parts",
     "spki_sha256",

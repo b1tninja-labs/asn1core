@@ -75,3 +75,19 @@ class DerViolation(Asn1Error):
         super().__init__(f"{message}{suffix}")
         self.rule = rule
         self.offset = offset
+
+
+class StringPrepError(Asn1Error):
+    """A string the RFC 4518 profile refuses at its Prohibit step (§2.4).
+
+    Not a `DecodeError`: the bytes decoded fine, and the document is intact. What failed is a
+    matching rule, which is why this does not inherit from the parse-error branch - a caller
+    inventorying certificates must still be able to read a name that no comparison rule will accept.
+
+    ``issues`` carries one description per refused code point, in the order they appear, so the
+    caller can report every problem instead of only the first.
+    """
+
+    def __init__(self, message: str, *, issues: tuple[str, ...] = ()) -> None:
+        super().__init__(message)
+        self.issues = issues

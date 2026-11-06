@@ -35,6 +35,7 @@ from asn1core import (  # noqa: E402
     certificate_parts,
     issuer,
     parse_certificate,
+    preparation_issues,
     subject,
     validity,
     validity_encoding_issue,
@@ -258,6 +259,8 @@ def main() -> int:
     sig_failed = []
     cert_agreed = 0
     cert_refused = []
+    prep_checked = 0
+    prep_refused = []
 
     for path in paths:
         der = path.read_bytes()
@@ -346,6 +349,20 @@ def main() -> int:
                 print(f"  FAIL {path.name[:24]}: a name is not within its own root")
                 failures += 1
 
+            # RFC 4518 preparation over every attribute value in circulation. Two repertoires are
+            # asked about, because §2 pins Unicode 3.2 and that differs from current data on
+            # 59,842 code points; what matters here is whether shipped names land in the gap.
+            for prepared_name in (mine_subject, mine_issuer):
+                for rdn in prepared_name.rdnsets:
+                    for attr in rdn:
+                        prep_checked += 1
+                        for flavour in ("current", "pinned"):
+                            issues = preparation_issues(attr.value, unassigned=flavour)
+                            if issues:
+                                prep_refused.append(
+                                    (path.name[:24], flavour, attr.value[:24], issues[0][:60])
+                                )
+
         # The signature itself, over the bytes this package extracted. Only self-issued documents
         # can be checked this way: six entries in the machine's Root store are cross-certificates,
         # issued by a different CA than the one whose key they carry, and verifying those against
@@ -427,6 +444,12 @@ def main() -> int:
         f"certificate contents (serial, version, algorithm, extensions) agreed={cert_agreed}, "
         f"refused={len(cert_refused)}"
     )
+    print(
+        f"attribute values prepared={prep_checked}, refused by RFC 4518 2.4={len(prep_refused)} "
+        "(both repertoires)"
+    )
+    for name, flavour, value, why in prep_refused[:10]:
+        print(f"  preparation refuses: {name} [{flavour}] {value!r} :: {why}")
     for name, why in cert_refused[:10]:
         print(f"  certificate refused: {name} :: {why}")
     for name, why in sig_skipped[:10]:

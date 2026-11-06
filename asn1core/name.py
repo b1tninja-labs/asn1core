@@ -21,20 +21,23 @@ prepared values are equal; two RDNs match when they hold the same number of attr
 off; two names match when they have the same number of RDNs, pair off, **and appear in the same
 order**.
 
-What `normalize_value` implements is named in its docstring, and it is not the whole profile: the
-RFC 4518 mapping tables in Appendix A and the prohibited-character and bidirectional checks are
-not here. Those gaps are recorded in `PLAN.md` as their own open obligation rather than left for a
-reader to discover.
+The whole profile is implemented, in `stringprep.py`: §2.2's mapping lists as corrected by erratum
+860, §2.3 normalisation, case folding, and §2.6.1 space handling. Two things there are worth knowing
+before trusting a StringPrep you have met elsewhere. §2.5 does nothing at all - RFC 4518 ignores
+bidirectional characters rather than checking them - and §2.4's prohibited-character gate is applied
+by `stringprep.prepare_value` but deliberately not by `normalize_value`, so that a certificate
+already in circulation never stops matching its own spelling because one code point is odd. That
+split is recorded in `PLAN.md` as a decision, not a gap.
 """
 
 from __future__ import annotations
 
-import unicodedata
 from dataclasses import dataclass
 
 from .errors import CertificateError
 from .node import Node
 from .oid import decode_oid
+from .stringprep import insignificant_space, prepare_mapped
 from .tag import Tag, TagClass
 
 __all__ = [
@@ -230,42 +233,29 @@ def _attribute(node: Node) -> tuple[str, str]:
 
 
 def normalize_value(text: str) -> str:
-    """Prepare one attribute value for comparison, per RFC 5280 §7.1 and RFC 4518 §2.6.1.
+    """Prepare one attribute value for comparison, per RFC 5280 §7.1 and RFC 4518 §2.
 
-    Implemented: non-ASCII spaces (Unicode class Zs) mapped to SPACE, soft hyphen removed, NFC
-    normalisation (RFC 4518 §2.3), case folding (§7.1's clarification, pointing at RFC 3454
-    Appendix B.2 - Python's ``casefold`` performs full folding), and the insignificant space
-    handling of §2.6.1 for stored values. That last rule surprises people and is stated exactly: a
+    The steps are RFC 4518's own, in its own order: Transcode (done by `decode_string`, which knows
+    each string type's codec), Map (§2.2 - the map-to-nothing lists, separators to SPACE, then case
+    folding per RFC 3454 B.2), Normalize (§2.3, NFC), then Insignificant Space Handling (§2.6.1,
+    attribute-value branch). §2.5 asks for nothing - "Bidirectional characters are ignored" - which
+    is a departure from RFC 3454 StringPrep worth knowing before comparing this profile to another.
+    All of it lives in `stringprep.py`, which carries the reasoning and the erratum. That last rule
+    surprises people and is stated exactly: a
     value with at least one non-space character comes back with **exactly one SPACE at each end**,
     and **every inner run of spaces, however long, replaced by exactly two**; a value with no
     non-space character comes back as exactly two SPACEs. So ``"Paris"``, ``" paris "`` and
     ``"Paris\u00a0\u00a0 "`` all prepare to ``" paris "``, while the RFC's own worked example maps
     ``"foo bar  "`` to ``" foo  bar "``.
 
-    Not implemented: the rest of RFC 4518's Appendix A mapping tables, the prohibited-character
-    test in §2.2 and the bidirectional checks in §2.4. Those can decide equality for exotic input,
-    so this is a strong subset rather than a full StringPrep, and ``PLAN.md`` tracks the gap.
+    The one step deliberately left out of *this* function is §2.4, the prohibited-character gate.
+    Under the profile a value that fails preparation matches nothing at all, which for a codec means
+    a shipped certificate could stop matching its own trust anchor over one odd code point. The gate
+    is available - `stringprep.prepare_value` raises `StringPrepError`, `stringprep.preparation_issues`
+    reports - and the comparison path stays total. It is the same division this package makes for
+    UTCTime spelling and for non-positive serial numbers: parse and report here, refuse elsewhere.
     """
-    mapped = "".join(" " if ch != " " and unicodedata.category(ch) == "Zs" else ch for ch in text)
-    mapped = mapped.replace("\u00ad", "")
-    return _insignificant_space(unicodedata.normalize("NFC", mapped).casefold())
-
-
-def _insignificant_space(text: str) -> str:
-    """RFC 4518 §2.6.1, attribute-value branch. SPACE here means U+0020 and nothing else."""
-    if not any(ch != " " for ch in text):
-        return "  "
-    built: list[str] = []
-    run = 0
-    for ch in text:
-        if ch == " ":
-            run += 1
-            continue
-        if built and run:
-            built.append("  ")
-        built.append(ch)
-        run = 0
-    return " " + "".join(built) + " "
+    return insignificant_space(prepare_mapped(text))
 
 
 def names_equal(left: Name, right: Name) -> bool:

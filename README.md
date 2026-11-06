@@ -95,6 +95,22 @@ Fields are located by tag, never by index: `TBSCertificate` puts optional `issue
 are both optional. A CRL's version also reads 1 where you might expect 2, because `Version` counts
 from `v1(0)`.
 
+Name comparison uses the RFC 4518 LDAP StringPrep profile that RFC 5280 §7.1 requires, and the
+profile has two entry points because one question is not the same as the other:
+
+```python
+from asn1core import normalize_value, prepare_value, preparation_issues
+
+normalize_value("Foo\u00a0Bar ")   # " foo  bar " - total: comparison never fails
+prepare_value("Bad\ufffdValue")    # raises StringPrepError: 2.4 refuses the value
+preparation_issues("Bad\ufffdValue")  # the same refusal, as text instead of an exception
+```
+
+`normalize_value` does not run the prohibited-character gate on purpose. Under the profile a value
+that fails preparation matches nothing, which would let one odd code point stop a shipped
+certificate matching its own trust anchor. Measured over the local store: 577 attribute values, 0
+that either reading of §2.4 would refuse.
+
 Unknown tags survive decode-encode verbatim. Certificate extensions are the whole reason
 this library is needed, and a codec that drops what it does not recognise defeats the point.
 
@@ -110,14 +126,9 @@ silently becomes `2.40`. Here it is a real check, and `2.5.29.19` - most of X.50
 
 ## Not yet implemented
 
-Time, distinguished names, certificate and CRL structure, and the three end-to-end X.509 fixtures
-in `VECTORS.md` are done. What is not:
+Time, distinguished names, string preparation, certificate and CRL structure, and the three
+end-to-end X.509 fixtures in `VECTORS.md` are done. What is not:
 
-- **RFC 4518 StringPrep in full.** Case folding, NFC, §2.6.1 space handling and the §7.1 matching
-  rules are implemented; the Appendix A mapping tables, the prohibited-character set and the
-  bidirectional checks are not. The subset is named in `name.py`'s docstring rather than called
-  StringPrep, because claiming the whole name for part of the work is how a codec ends up deciding
-  equality wrongly for input nobody tested.
 - **PrintableString's restricted alphabet** (X.680 §40.4). Nothing in the store exercises it - zero
   PrintableStrings in 577 attribute values - and the defining text is not in the RFC library, so
   the check waits for the real alphabet instead of a guess that would reject shipped certificates.
