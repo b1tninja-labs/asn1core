@@ -113,6 +113,12 @@ get checked against the ITU text or against a second independent implementation.
 | | `time-not-zulu` | `"500101000000+0100"`, `"500101000000z"`, `"5001010000Z"` | BER accept, **DER reject** | Zulu and seconds are both mandatory in this profile; the local differential and the 11-octet minute form are legal ASN.1, so a tolerant read keeps the octets and resolves nothing |
 | | `time-invalid-calendar` | `"500230000000Z"`, `"500431000000Z"` | **reject as DER** | 30 February and 31 April: checked as a date, not only as digits in the right positions |
 | | `time-leap-second` | `"500101000060Z"` | **reject as DER** `[verify against X.690]` | X.690 permits a seconds field of 60 in some time encodings; `datetime` cannot hold it, and carrying it into the next minute would move the instant by up to sixty seconds. Refused under its own rule name rather than guessed at, and the row stays open |
+| | `dn-order-significant` | `C=US,O=Example` against `O=Example,C=US` | **not equal** | §7.1: two names match "if they have the same number of RDNs, for each RDN in DN1 there is a matching RDN in DN2, and the matching RDNs appear in the same order in both DNs". Order *inside* one RDN is not significant, because an RDN is a SET |
+| | `dn-multi-valued-rdn` | one RDN holding `C=FR` and `O=Example` | equal to the same two attributes in the other order | matching pairs attributes off without reusing one. No shipped certificate here contains a multi-valued RDN - 577 RDNs measured, all single-valued - so the case comes from the generated fixture and from hand-built TLVs, never from the store |
+| | `dn-insignificant-space` | `"foo bar  "` | prepares to `" foo  bar "` | RFC 4518 §2.6.1 for stored values: exactly one SPACE at each end and **every** inner run, however long, replaced by exactly two. Trimming is the intuitive behaviour and it is wrong. Empty and all-space input both prepare to exactly two SPACEs. Vector taken from the RFC's own worked example |
+| | `dn-teletex-ambiguity` | tag 19 carrying `Caf E9` | reads as `Café` through the Latin-1 fallback | X.500 says T.61 for this tag; issuers have shipped UTF-8 and Latin-1 under it too. §7.1 makes support OPTIONAL, and 520 of the store's 577 attribute values carry this tag, so refusing them is not viable and pretending T.61 would be a guess. The value keeps its `kind` so a caller can see which rule produced the text |
+| | `dn-encoding-not-identity` | `C=US` in PrintableString against `C=us` in UTF8String | **equal** | §7.1 compares prepared values, so neither the string type nor the stored TLV takes part in the match. `Name.__eq__` implements the match rather than a field comparison: a name pinned for trust has to keep matching in a document that spelled it differently |
+| | `printable-charset` | PrintableString holding `@` | **not checked** `[verify against X.680]` | the restricted alphabet is defined in X.680, which is not in the RFC library, and the local store offers nothing to learn from - zero PrintableStrings in 577 values, and even a freshly generated cryptography certificate chose TeletexString for `C`. Enforcing a guessed alphabet is how certificates get wrongly rejected, so the check is absent on purpose and tracked as obligation `dk.printable-charset` |
 | `setof-unsorted` | two SET OF children out of order | BER accept, **DER reject** | DER requires SET OF components sorted by their encodings `[verify against X.690]`; it matters here because RDN sets are compared byte-wise during path validation |
 | `seq-indefinite` | `30 80 ... 00 00` | BER accept, **DER reject** | indefinite length is not permitted by DER |
 
@@ -162,6 +168,13 @@ genuine issued documents, and one of them earns its place for a specific reason:
 |---|---|---|---|
 | `root-ecdsa.der` | 538 | `26c56ad2208d1e9b152f66853bf4797cbeb7552c1f3f477251e8cb1ae7e797bf` | ECDSA-P384, `version [0]` **present** (v3), SPKI 120 bytes |
 | `root-rsa.der` | 576 | `e7685634efacf69ace939a6b255b7b4fabef42935b50a265acb5cb6027e44e70` | **no version field at all** - a v1 certificate, so every `TBSCertificate` child sits one position earlier than a v3 document. The naive `children[6]` read returns the wrong object on this shipped, real input |
+| `multivalue-rdn.der` | 1057 | *not pinned* | **generated**, by `sdk-forge/probe_name_fixture.py`: multi-valued RDN, mixed UTF8String, TeletexString and IA5String, padded and doubled-space values, and an attribute type with no RFC 4514 short name. Its digest is deliberately not pinned because the generator makes a fresh key each run; what is pinned is the name |
+
+Fixture 1 above asked for multi-valued RDNs and mixed PrintableString and UTF8String. The RDN
+shape is covered; the PrintableString half is not, and cannot be from this generator - asked to
+encode `C=FR`, cryptography chose TeletexString, exactly as 520 of the store's 577 attribute values
+did. PrintableString is therefore exercised through hand-built TLVs rather than through a document,
+and the character-set question is left open as `dk.printable-charset` instead of being guessed at.
 
 The store itself supplies 75 documents for `tools/crosscheck_x509.py`, which is where the
 structural claims get checked against something that is not this code.
@@ -188,9 +201,10 @@ bytes to raise about.
   `tag-c-16384`, `tag-nonminimal`, `len-long-256`, `len-long-65536`, `len-nonminimal`,
   `len-undefined-high`, `len-overflow`, `len-indefinite`, and all eight rows of the truncation
   table. The first draft of this file claimed "nineteen cases" while naming sixteen - the count
-  that matters is the suite's, not the prose's. As of 2026-11-05 the corpus is 87 tests in
-  `tests/test_defect_corpus.py`, `tests/test_structure_corpus.py` and
-  `tests/test_vector_arithmetic.py`, and the per-obligation state is recorded in `PLAN.md`.
+  that matters is the suite's, not the prose's. As of 2026-11-05 the suite holds 337 cases in 91
+  test functions across eight files - the defect, structure and vector-arithmetic corpora, the
+  snmpy regression floor, and the OID, X.509 structure, time and name corpora - and the
+  per-obligation state is recorded in `PLAN.md`.
 
 
 ## Provenance of these bytes, and what is still owed

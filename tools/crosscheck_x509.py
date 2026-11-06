@@ -31,10 +31,14 @@ sys.path.insert(0, str(ROOT))
 
 from asn1core import (  # noqa: E402
     Asn1Error,
+    Name,
     certificate_parts,
+    issuer,
+    subject,
     validity,
     validity_encoding_issue,
 )
+from asn1core.name import within  # noqa: E402
 
 STORES = ("Cert:\\LocalMachine\\Root", "Cert:\\LocalMachine\\CA", "Cert:\\CurrentUser\\Root")
 
@@ -87,6 +91,8 @@ def main() -> int:
     time_agreed = 0
     time_refused = []
     profile_issues = []
+    names_agreed = 0
+    name_refused = []
 
     for path in paths:
         der = path.read_bytes()
@@ -146,6 +152,34 @@ def main() -> int:
                 )
                 failures += 1
 
+        # Distinguished names. The rendering is compared character by character against
+        # cryptography's RFC 4514 output, and the equality relation is cross-checked by comparing
+        # our verdict on subject==issuer with theirs for the same certificate.
+        try:
+            mine_subject, mine_issuer = subject(der), issuer(der)
+        except Asn1Error as exc:
+            name_refused.append((path.name[:24], f"{type(exc).__name__}: {exc}"))
+        else:
+            for label, ours, theirs in (
+                ("subject", mine_subject, other.subject),
+                ("issuer", mine_issuer, other.issuer),
+            ):
+                if ours.rfc4514() == theirs.rfc4514_string():
+                    names_agreed += 1
+                else:
+                    print(f"  FAIL {path.name[:24]}: {label} renders differently")
+                    print(f"       ours : {ours.rfc4514()}")
+                    print(f"       theirs: {theirs.rfc4514_string()}")
+                    failures += 1
+            if (mine_subject == mine_issuer) != (other.subject == other.issuer):
+                # Name.__eq__ on both sides: if we disagree about whether a root is self-signed,
+                # one of the two equality relations is wrong.
+                print(f"  FAIL {path.name[:24]}: self-signed verdict disagrees")
+                failures += 1
+            if within(mine_subject, Name(rdnsets=mine_subject.rdnsets[:1], raw=b"")) is not True:
+                print(f"  FAIL {path.name[:24]}: a name is not within its own root")
+                failures += 1
+
         try:
             theirs = other.public_key().public_bytes(
                 Encoding.DER, PublicFormat.SubjectPublicKeyInfo
@@ -171,6 +205,11 @@ def main() -> int:
         f"refused by the strict time reader={len(time_refused)}, "
         f"spelled against §4.1.2.5={len(profile_issues)}"
     )
+    print(
+        f"names rendered identically={names_agreed}, refused by the name parser={len(name_refused)}"
+    )
+    for name, why in name_refused[:10]:
+        print(f"  name refused: {name} :: {why}")
     for name, ours, theirs_len in spki_reencode[:10]:
         print(f"  differs: {name} ours={theirs_len} theirs={ours}")
     for name, why in time_refused[:10]:

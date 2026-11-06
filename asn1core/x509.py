@@ -28,6 +28,7 @@ import hashlib
 from dataclasses import dataclass
 
 from .errors import CertificateError
+from .name import Name, parse_name
 from .node import Node, decode
 from .tag import Tag, TagClass
 from .time import UTC_TIME_CEILING_YEAR, UTC_TIME_FLOOR_YEAR, check_generalized_time, check_utc_time
@@ -36,8 +37,10 @@ __all__ = [
     "CertificateParts",
     "Validity",
     "certificate_parts",
+    "issuer",
     "signature_algorithm",
     "spki_sha256",
+    "subject",
     "subject_public_key_info",
     "tbs_certificate",
     "validity",
@@ -83,6 +86,8 @@ class CertificateParts:
     signature_value: bytes
     subject_public_key_info: bytes
     validity: bytes
+    issuer: bytes
+    subject: bytes
     version: int | None
 
 
@@ -148,6 +153,8 @@ def certificate_parts(buffer: bytes, *, der: bool = True) -> CertificateParts:
         signature_value=content[1:],
         subject_public_key_info=fields[len(_TBS_FIELDS) - 1].raw,
         validity=fields[3].raw,  # serialNumber, signature, issuer, validity
+        issuer=fields[2].raw,
+        subject=fields[4].raw,
         version=version,
     )
 
@@ -262,13 +269,31 @@ def _validity_nodes(buffer: bytes, *, der: bool) -> tuple[CertificateParts, Node
 
 
 def _time_of(node: Node) -> datetime.datetime:
-    for tag, check, name in (
+    """Read one Validity member, dispatching on which time type carried it."""
+    for tag, check, label in (
         (_UTC_TIME, check_utc_time, "UTCTime"),
         (_GENERALIZED_TIME, check_generalized_time, "GeneralizedTime"),
     ):
         if node.tag == tag:
             content = node.payload
             if content is None:
-                raise CertificateError(f"{name} carries no content octets")
+                raise CertificateError(f"{label} carries no content octets")
             return check(content)
     raise CertificateError(f"Validity holds a UTCTime or GeneralizedTime, found tag {node.tag!r}")
+
+
+def issuer(buffer: bytes, *, der: bool = True) -> Name:
+    """The issuer DN, as structure rather than as a byte slice."""
+    return _name_of(certificate_parts(buffer, der=der).issuer, der=der)
+
+
+def subject(buffer: bytes, *, der: bool = True) -> Name:
+    """The subject DN."""
+    return _name_of(certificate_parts(buffer, der=der).subject, der=der)
+
+
+def _name_of(raw: bytes, *, der: bool) -> Name:
+    node, end = decode(raw, der=der)
+    if end != len(raw):
+        raise CertificateError(f"{len(raw) - end} byte(s) follow a Name; a Name is one object")
+    return parse_name(node)

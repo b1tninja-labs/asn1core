@@ -54,14 +54,16 @@ spki_sha256(cert_der)                      # hex digest of exactly those bytes
 it and every field shifts. The walk skips that slot by tag, never by index: `root-rsa.der` in
 `tests/fixtures/` is a real shipped root certificate that depends on this.
 
-Dates are read the way RFC 5280 says, and the profile's production rules are reported rather than
-enforced:
+Dates are read the way RFC 5280 says, and names are compared the way it says:
 
 ```python
-from asn1core import validity, validity_encoding_issue
+from asn1core import issuer, subject, validity, validity_encoding_issue, within
 
-validity(cert_der).not_before          # aware datetime: "960129000000Z" is 1996, §4.1.2.5.1
-validity_encoding_issue(cert_der)      # §4.1.2.5 says a CA should have used UTCTime here
+subject(cert_der).common_name        # str; RFC 4514 form via str(subject(cert_der))
+subject(cert_der) == issuer(cert_der)  # §7.1 match: prepared values, RDN order significant
+within(child_name, anchor_name)      # §7.1 subtree test, root-side prefix
+validity(cert_der).not_before        # aware datetime: "960129000000Z" is 1996, §4.1.2.5.1
+validity_encoding_issue(cert_der)    # §4.1.2.5 says a CA should have used UTCTime here
 ```
 
 `validity_encoding_issue` answers rather than raises because one of the roots in a live trust
