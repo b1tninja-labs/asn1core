@@ -91,3 +91,15 @@ class StringPrepError(Asn1Error):
     def __init__(self, message: str, *, issues: tuple[str, ...] = ()) -> None:
         super().__init__(message)
         self.issues = issues
+
+
+class ArmourError(DecodeError):
+    """The RFC 7468 container is malformed: no matching boundary, base64 outside its alphabet, padding in the
+    middle of a line, a label that opens one block and closes another.
+
+    It is a `DecodeError` and not a `DerViolation` because nothing here is a question of canonical spelling -
+    the payload is not even looked at. The distinction is the whole point of keeping the container separate: a
+    document whose *armour* is broken may still hold perfect DER, and a document whose armour is beautiful may
+    hold garbage. A caller triaging a trust store needs to know which of the two failed, because only one of
+    them is evidence about the certificate.
+    """

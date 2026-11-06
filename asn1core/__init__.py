@@ -19,6 +19,7 @@ from .cert import Certificate, Extension, parse_certificate, parse_extensions
 from .crl import Crl, Revoked, parse_crl
 from .der import check_bit_string, check_boolean, check_integer, check_set_of, validate_der
 from .errors import (
+    ArmourError,
     Asn1Error,
     CertificateError,
     DecodeError,
@@ -86,6 +87,7 @@ __all__ = [
     "SHORT_NAMES",
     "UTC_TIME_CEILING_YEAR",
     "UTC_TIME_FLOOR_YEAR",
+    "ArmourError",
     "Asn1Error",
     "Attribute",
     "Certificate",
