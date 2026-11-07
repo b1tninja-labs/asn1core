@@ -113,7 +113,9 @@ def test_every_string_type_the_profile_names_decodes_by_its_own_codec() -> None:
         18: (b"123", "123", "numericString"),
         19: (b"Example", "Example", "printableString"),
         20: (b"Caf\xe9", "Café", "teletexString"),  # not valid UTF-8: Latin-1 fallback
+        21: (b"Caf\xe9", "Café", "videotexString"),  # same register-defined ambiguity as Teletex
         22: (b"example.com", "example.com", "ia5String"),
+        25: (b"Example", "Example", "graphicString"),
         26: (b"Visible", "Visible", "visibleString"),
         27: (b"General", "General", "generalString"),
         28: ("Uni".encode("utf-32-be"), "Uni", "universalString"),
@@ -146,13 +148,14 @@ def test_tags_the_old_table_claimed_as_string_types_are_refused_by_number() -> N
 def test_a_string_type_this_codec_does_not_model_is_refused_by_name() -> None:
     """An unmodelled character string type must not be read through a guessed codec.
 
-    Tag 21 sits inside the 18-22 band that X.680 Table 1 labels character string types, but this codec has
-    no entry for it, because the number could not be re-read from the text this session and inventing one is
-    how the table broke. The refusal therefore has to distinguish "a string type I decline" from "not a
-    string type": the second would be a false statement about the bytes, and a caller that trusts a name it
-    could not actually read is the failure this package exists to prevent.
+    X.680 Table 1 bounds the character string types at 18-22 and 25-30, and §41 Table 8 numbers every member
+    of those bands except one. That remainder is the type §44 defines as *unrestricted*: its value carries
+    its own abstract- and transfer-syntax identification, so no codec can be chosen for it from the tag
+    alone. The refusal has to distinguish "a string type I decline" from "not a string type", because the
+    second would be a false statement about the bytes - and a caller that trusts a name it could not actually
+    read is the failure this package exists to prevent.
     """
-    ava = _tlv(0x30, _OID_2_5_4_6 + _tlv(21, b"Videotex"))
+    ava = _tlv(0x30, _OID_2_5_4_6 + _tlv(29, b"\x04\x02\x31\x32"))
     node, _ = decode(_tlv(0x30, _tlv(0x31, ava)))
     with pytest.raises(CertificateError, match="does not model"):
         parse_name(node)

@@ -129,12 +129,15 @@ silently becomes `2.40`. Here it is a real check, and `2.5.29.19` - most of X.50
 Time, distinguished names, string preparation, certificate and CRL structure, and the three
 end-to-end X.509 fixtures in `VECTORS.md` are done. What is not:
 
-- **Two character string types are not modelled.** VideotexString and GraphicString sit inside the
-  bands X.680 Table 1 assigns to character strings, but their individual numbers could not be
-  re-read from the recommendation text available here, so an attribute value under either tag is
-  refused by name rather than decoded by guess. PrintableString's own alphabet (X.680 §41.4
-  Table 10) **is** enforced now, on the DER path only: see `VECTORS.md`, row `printable-charset`.
-- **Extension semantics and path validation.** This package reads an extension's payload and lists
+- **The unrestricted character string type is declined.** Every *restricted* type is numbered and
+  decoded by its own codec - the eleven tags come from X.680 §41 Table 8, and the ASCII-restricted
+  ones are read as Latin-1. The type §44 defines as unrestricted carries its own abstract- and
+  transfer-syntax identification, so no codec follows from the tag and an attribute value using it
+  is refused by name rather than guessed at.
+- **NumericString's alphabet is known but unenforced.** X.680 §41.2 Table 9 lists it as digits
+  0-9 and SPACE, so the check is citable (see `dk.numeric-charset` in `VECTORS.md`). It stays
+  unenforced because nothing validates it: zero NumericStrings in 75 shipped certificates, against
+  520 PrintableStrings that did justify enforcing their alphabet.
   the unrecognised critical ones; interpreting them and applying RFC 5280 §6 is `pkix`'s job.
 - The value types beyond what the corpus needs, and any form of general-purpose schema or `.asn`
   compilation.

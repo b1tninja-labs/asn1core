@@ -257,10 +257,13 @@ def test_indefinite_terminator_is_not_searched_for_inside_content() -> None:
     integers, zero OID arcs, addresses - so this is not a pathological input.
 
     Note on the corpus row this replaces: VECTORS.md originally used 04 80 41 00 00 42 00 00,
-    a *primitive* indefinite length. X.690 treats primitive indefinite content as a sequence
-    of encoding units rather than raw bytes, which makes the expected octets genuinely
-    ambiguous on the reading written there, so the row is unresolved `[verify against X.690]`
-    and this constructed case carries the assertion instead.
+    a *primitive* indefinite length, and dropped it as unresolvable. The drop was right; the stated
+    cause was not. X.690 (02/2021) §8.1.3.2 a) requires a sender to use the definite form if the
+    encoding is primitive (read 2026-11-07 via itulib), and §7.1 dynamic conformance gives a
+    receiver no licence to accept what no conforming sender may emit - so the expected octets were
+    never ambiguous, the input was illegal, and `node._parse` refuses it under a named error. What
+    this test asserts is a different claim: that the terminator is found only at an object boundary,
+    which the constructed form carries.
     """
     raw = bytes.fromhex("30800403" + "000041" + "0000")
     node, offset = decode(raw)

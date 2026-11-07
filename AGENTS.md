@@ -11,7 +11,7 @@ Everything here was run in this repository and passed. Use the module form: bare
 `mypy` are not on PATH in this environment.
 
 ```
-python -m pytest -q --cov        # 87 passed, coverage floor 85
+python -m pytest -q --cov        # 439 passed (2026-11-07), coverage floor 85, measured 90%
 python -O -m pytest -q           # same suite, asserts stripped
 python -m ruff check .
 python -m ruff format --check .
@@ -31,10 +31,16 @@ unrelated projects, and a `ruff format .` at that level has already caused damag
 ## Where the specification lives, and where it does not
 
 The normative source for BER and DER is **ITU-T X.680 and X.690, which are not in the RFC
-series**. `rfclib` cannot answer a question about tag-number encoding or DER canonicalisation.
-It is still the authority for the parts that are RFCs:
+series**, so `rfclib` cannot answer a question about tag-number encoding or DER canonicalisation.
+Itulib can. `D:\code\itulibrary` holds every in-force edition of the ASN.1 series (X.680-683,
+X.690-697) plus two superseded X.690 editions and Erratum 1, fetched, digested and indexed
+clause by clause. Ask it the way you would ask rfclib, from its own venv:
+`python -m itulib.cli read X.690 8.19.4`, `... search X.680 "PrintableString"`, `... grep X.680
+"TeletexString"`. Cite the edition - rules move between them, and this package's citations name
+02/2021. A clause is a lookup, not a recollection: the two defects found this way were both rules
+stated from memory. `rfclib` remains the authority for the parts that are RFCs:
 
-- `rfclib.read("RFC5280§4.1.3.2", view="normative")` - why a signature must be verified over
+- `rfclib.read("RFC5280§4.1.1.3", view="normative")` - why a signature must be verified over
   the DER encoding of the TBSCertificate. This is the reason `Node.raw` exists.
 - `rfclib.info("RFC5280")` before citing it: Proposed Standard, 6 verified errata.
 - `rfclib.grep("RFC5280", pattern="keyCompromise")` rather than guessing a section number.
@@ -61,13 +67,13 @@ refusals for length, integer, boolean, bit string and SET OF order.
 **Not done:** RFC 5280 §4.2 extension semantics and §6 path validation, both of which belong to
 `pkix`; the two generated fixtures deliberately carry no digest, because each run makes fresh key
 material; and any form of schema or `.asn` compilation. Nothing is published and no version is
-assigned. OID content parsing **is** done (`oid.py`, `dk.oid` closed in `PLAN.md`) - the sentence
-this replaces predated it, which is the usual way a status section goes stale.
+assigned. Two `PLAN.md` rows stay `[part]`: `dk.indefinite` (the primitive-case refusal is cited but has
+no named test yet) and `dk.corpus` (negative vectors from a second implementation are still owed).
 
 ## Invariants
 
 1. **`Node.raw` is the input's own octets.** Any refactor that reconstructs a node's bytes
-   from its parts breaks RFC 5280 §4.1.3.2 verification and certledger invariant I3.
+   from its parts breaks RFC 5280 §4.1.1.3 verification and certledger invariant I3.
    `test_original_bytes_survive_a_noncanonical_parse` is the guard.
 2. **BER tolerates, DER refuses, and the refusal is named.** Never normalise a non-canonical
    document into a canonical one: that gives one certificate two identities.
@@ -87,7 +93,6 @@ this replaces predated it, which is the usual way a status section goes stale.
 ## Derived from snmpy, and what that means
 
 The architecture comes from `snmpy`'s `ber` package (MIT, © 2026 snmpy Contributors); the
-behaviour was written from `VECTORS.md` because the original has seven measured defects,
-six of which are fixed here
-(`PLAN.md`). **`NOTICE` must keep carrying the MIT text** - that is MIT's only condition, and
+behaviour was written from `VECTORS.md` because the original has eight measured defects,
+all of which are fixed here (`PLAN.md`). **`NOTICE` must keep carrying the MIT text** - that is MIT's only condition, and
 `tools/check_dist.py` fails the build if the attribution ever disappears. Do not "tidy" it.

@@ -63,10 +63,11 @@ _OID = Tag(6, False, TagClass.universal)
 # on the DER path in der.py, not guessed at here. A codec of None means the ambiguous ones: try
 # UTF-8, then fall back to Latin-1.
 #
-# The tag numbers come from Rec. ITU-T X.680 (02/2021) Table 1 (§8.6), which assigns universal
-# 13 to the Relative object identifier type and 14 to the TIME type and puts character string
-# types in 18-22 and 25-30, together with the restricted-character-string table in §41 that
-# numbers NumericString 18, PrintableString 19 and TeletexString (T61String) 20. An earlier
+# The tag numbers come from Rec. ITU-T X.680 (02/2021) §41 Table 8 ("List of restricted character string
+# types"), which numbers UTF8String 12, NumericString 18, PrintableString 19, TeletexString (T61String) 20,
+# VideotexString 21, IA5String 22, GraphicString 25, VisibleString (ISO646String) 26, GeneralString 27,
+# UniversalString 28 and BMPString 30, read together with Table 1 (§8.6), which assigns universal 13 to the
+# Relative object identifier type and 14 to the TIME type. An earlier
 # version of this table had 13 numericString, 14 printableString, 19 teletexString and
 # 20 videotexString, which is the 18-22 band shifted down four places with two invented entries
 # added. It survived because every affected value is ASCII: 520 of the 577 attribute values in the
@@ -77,26 +78,34 @@ _OID = Tag(6, False, TagClass.universal)
 # store's own bytes, cryptography's encoder (it emits 0x13 for `C=US` and 0x16 for a domain
 # component), and X.680.
 #
-# VideotexString and GraphicString are deliberately absent: both are character string types inside the
-# bands X.680 Table 1 describes, but I could not re-read their individual numbers from the extracted text
-# this session, and inventing a tag for a type this repository cannot measure is exactly how the table broke
-# in the first place. An attribute value carrying an unmodelled string tag is refused by name below rather
-# than mislabelled.
+# VideotexString and GraphicString are numbered here from Table 8, which the recommendation only became
+# searchable for once `D:\code\itulibrary` had fetched and indexed X.680; before that their numbers were
+# inference from Table 1's band, and inventing a tag is exactly how this table broke. Both carry a codec of
+# None because Table 8 defines their characters by reference to registration numbers in the ISO
+# International Register of Coded Character Sets - Videotex noting the entries that "provide the
+# functionality of CCITT Rec. T.100 and Rec. ITU-T T.101", Graphic as "All G sets + SPACE" - so there is no
+# fixed mapping to apply, and they take the same UTF-8-then-Latin-1 fallback as TeletexString while keeping
+# their `kind` for the caller to see.
 _CODECS: dict[int, tuple[str, str | None]] = {
     12: ("utf8String", "utf-8"),
     18: ("numericString", "latin-1"),
     19: ("printableString", "latin-1"),
     20: ("teletexString", None),
+    21: ("videotexString", None),
     22: ("ia5String", "latin-1"),
+    25: ("graphicString", None),
     26: ("visibleString", "latin-1"),
     27: ("generalString", "latin-1"),
     28: ("universalString", "utf-32-be"),
     30: ("bmpString", "utf-16-be"),
 }
 
-# X.680 Table 1: the universal tags that name a character string type. Two of them are not modelled
-# above, and a value under one of those is a string type that this codec declines, not a value that is
-# not a string. Saying which is the difference between an honest refusal and a false statement.
+# Table 1's character-string band, 18-22 and 25-30. Table 8 numbers every member of it except one, which the
+# recommendation leaves to §44: the unrestricted character string type, whose value carries its own
+# abstract- and transfer-syntax identification (Annex G.2.8 tells the designer to "specify the repertoire of
+# characters and their coding into octets"). There is no codec to apply to such a value without being told
+# one, so declining it is substantive rather than a gap left open for want of a number - and the number
+# itself is deliberately not asserted here, because X.680 never spells it out in the extracted text.
 _CHARACTER_STRING_TAGS = frozenset({*range(18, 23), *range(25, 31)})
 
 # RFC 4514 §3's descriptor table. Types outside it render as dotted OIDs: cryptography does the
