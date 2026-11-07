@@ -23,7 +23,15 @@ from __future__ import annotations
 from .errors import DerViolation
 from .node import Node
 
-__all__ = ["check_bit_string", "check_boolean", "check_integer", "check_set_of", "validate_der"]
+__all__ = [
+    "PRINTABLE_ALPHABET",
+    "check_bit_string",
+    "check_boolean",
+    "check_integer",
+    "check_printable_string",
+    "check_set_of",
+    "validate_der",
+]
 
 
 def validate_der(buffer: bytes) -> Node:
@@ -135,3 +143,42 @@ def check_set_of(node: Node) -> None:
             rule="set-of-unsorted",
             offset=None,
         )
+
+
+# Rec. ITU-T X.680 (02/2021) §41.4 Table 10: the characters PrintableString may contain. Transcribed as data
+# rather than paraphrased as prose, so that a reviewer can compare it against the table one character at a
+# time, and pinned by cardinality in test_printable_string_permitted_alphabet_is_exactly_table_10: latin
+# capital letters (26), latin small letters (26), digits (10), SPACE, and eleven specials - APOSTROPHE '
+# LEFT PARENTHESIS ( RIGHT PARENTHESIS ) PLUS SIGN + COMMA , HYPHEN-MINUS - FULL STOP . SOLIDUS / COLON :
+# EQUALS SIGN = QUESTION MARK ? - which is 74 characters in total.
+PRINTABLE_ALPHABET = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 '()+,-./:=?"
+)
+
+
+def check_printable_string(content: bytes, *, offset: int | None = None) -> bytes:
+    """Return the content, having asserted that every character is one Table 10 permits.
+
+    This check differs in kind from the others in this module, and the difference is the reason the row in
+    ``VECTORS.md`` stayed open for so long. A non-minimal INTEGER is *legal BER with a forbidden spelling*:
+    the value exists, another implementation reads it the same way, and only DER refuses. A PrintableString
+    carrying a character outside its alphabet is not an unusual spelling of a value, it is **no value of that
+    type at all** (X.680 §41.4 defines the type by its permitted characters). So the tolerant path keeps the
+    octets and reports nothing, while the strict path refuses.
+
+    Enforcing it on the DER path is only safe because it was measured first: 520 of 520 PrintableString
+    attribute values across 75 certificates shipped by an operating system fall inside Table 10
+    (2026-11-07, the same store ``tools/crosscheck_store.py`` reads). The values that would have tripped it —
+    Entrust's ``www.entrust.net/CPS_2048 incorp. by ref. (limits liab.)``, with its underscore — arrive under
+    tag 20, TeletexString, which is what made the tag numbering in ``name.py`` part of the same question.
+    """
+    text = content.decode("latin-1")
+    bad = sorted({character for character in text if character not in PRINTABLE_ALPHABET})
+    if bad:
+        spelled = " ".join(f"{ord(character):02X}" for character in bad)
+        raise DerViolation(
+            f"PrintableString carries {len(bad)} character(s) outside X.680 Table 10: {spelled}",
+            rule="printable-charset",
+            offset=offset,
+        )
+    return content

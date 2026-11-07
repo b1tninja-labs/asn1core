@@ -1,7 +1,7 @@
 # Instructions for coding agents
 
-`asn1core` is an ASN.1 BER/DER codec with real code and a green suite - 87 tests, 91%
-coverage, mypy strict, ruff clean, on 2026-11-05. `PLAN.md` is the decision record and
+`asn1core` is an ASN.1 BER/DER codec with real code and a green suite - 439 tests, 90%
+coverage, mypy strict, ruff clean, on 2026-11-07.
 `VECTORS.md` is the conformance corpus: **the corpus is the exit test, and not every row in it
 passes yet.** Read the status section below before believing any claim in the README.
 
@@ -40,10 +40,15 @@ It is still the authority for the parts that are RFCs:
 - `rfclib.grep("RFC5280", pattern="keyCompromise")` rather than guessing a section number.
 - Cite with `rfclib.cite(...)`; never paraphrase normative text into a docstring.
 
-Rows in `VECTORS.md` marked `[verify against X.690]` are **still unresolved**. Do not code
-against them, and do not quietly pick an interpretation: `tests/test_defect_corpus.py` refuses
-primitive indefinite length precisely because the answer is unknown, and inventing one here
-would make this codec disagree with every other implementation in silence.
+Every `[verify against X.690]` / `[verify against X.680]` marker was retired on 2026-11-07 against
+the recommendations themselves, fetched and indexed by `D:\code\itulibrary` - `python -m itulib.cli
+read X.690 11.1`. That library, not memory, is the route to a clause, and using it changed three
+things here rather than just adding citations: one recorded rule does not exist (X.680 §47.3 bounds
+UTCTime seconds at 00-59), primitive indefinite length turned out to be settled after all (X.690
+§8.1.3.2 a), which is why `node._parse` refuses it), and the DN string tag numbers in `name.py`
+were four places low in the 18-22 band. If a row still seems unverified, resolve it the same way
+rather than coding against a guess: `tests/test_defect_corpus.py` refuses things precisely because
+the answer was unknown, and inventing one makes this codec disagree in silence.
 
 ## Status, stated honestly
 
@@ -53,9 +58,11 @@ crashed at 256, 65536, 16777216), truncation as a named error, framing bounded b
 indefinite-length termination **at object boundaries**, original-byte retention, and the DER
 refusals for length, integer, boolean, bit string and SET OF order.
 
-**Not done:** OID content parsing, so corpus row 7 (the `min(2, octet // 40)` arc clamp) is
-unaddressed; the three end-to-end X.509 fixtures; any schema or `.asn` compilation. Nothing is
-published and no version is assigned.
+**Not done:** RFC 5280 §4.2 extension semantics and §6 path validation, both of which belong to
+`pkix`; the two generated fixtures deliberately carry no digest, because each run makes fresh key
+material; and any form of schema or `.asn` compilation. Nothing is published and no version is
+assigned. OID content parsing **is** done (`oid.py`, `dk.oid` closed in `PLAN.md`) - the sentence
+this replaces predated it, which is the usual way a status section goes stale.
 
 ## Invariants
 

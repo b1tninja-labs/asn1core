@@ -83,13 +83,15 @@ def test_the_multi_valued_rdn_is_a_set_of_attributes_not_one_attribute_per_rdn()
         ("C", "FR"),
         ("O", "Example  Université  S.A."),
     }
-    assert {attr.kind for attr in root} == {"teletexString", "utf8String"}
-    # Measured rather than assumed. `C` came out as TeletexString here, which is also what the
-    # trust store does - 520 of its 577 attribute values carry that tag. §7.1 makes support for
-    # TeletexString optional, so an implementation that understood only UTF8String would fail to
-    # read most of the names in a default Windows trust store.
+    assert {attr.kind for attr in root} == {"printableString", "utf8String"}
+    # Measured, and re-measured against X.680 (02/2021) Table 1 on 2026-11-07. `C=FR` arrives under tag 19,
+    # which is PrintableString - the tag 520 of the trust store's 577 attribute values use, and the tag
+    # cryptography emits for `C=US`. An earlier revision of this test read that tag as TeletexString,
+    # because name.py's table was numbered four places low; the text was identical either way, since both
+    # decode ASCII to the same characters, so only `kind` was wrong. §7.1 makes PrintableString and
+    # UTF8String the two types a conforming implementation MUST support, and this fixture carries both.
     assert {attr.kind for rdn in dn.rdnsets for attr in rdn} == {
-        "teletexString",
+        "printableString",
         "utf8String",
         "ia5String",
     }
@@ -108,10 +110,9 @@ def test_every_string_type_the_profile_names_decodes_by_its_own_codec() -> None:
     """
     cases = {
         12: (b"Example", "Example", "utf8String"),
-        13: (b"123", "123", "numericString"),
-        14: (b"Example", "Example", "printableString"),
-        19: (b"Caf\xe9", "Café", "teletexString"),  # not valid UTF-8: Latin-1 fallback
-        20: (b"Videotex", "Videotex", "videotexString"),
+        18: (b"123", "123", "numericString"),
+        19: (b"Example", "Example", "printableString"),
+        20: (b"Caf\xe9", "Café", "teletexString"),  # not valid UTF-8: Latin-1 fallback
         22: (b"example.com", "example.com", "ia5String"),
         26: (b"Visible", "Visible", "visibleString"),
         27: (b"General", "General", "generalString"),
@@ -124,6 +125,37 @@ def test_every_string_type_the_profile_names_decodes_by_its_own_codec() -> None:
         parsed = parse_name(node)
         assert parsed.rfc4514() == f"C={expected}", hex(tag)
         assert parsed.rdnsets[0][0].kind == kind, hex(tag)
+
+
+def test_tags_the_old_table_claimed_as_string_types_are_refused_by_number() -> None:
+    """Regression witness for the numbering defect, stated as the refusal it has to be.
+
+    X.680 (02/2021) Table 1 assigns universal 13 to the Relative object identifier type and 14 to the TIME
+    type. `name.py` used to call those two numericString and printableString, so an attribute value spelled
+    with either tag was read as a name without complaint. Nothing in the trust store exercises either tag -
+    zero occurrences in 75 certificates - which is precisely why the wrong table survived: no real document
+    was there to contradict it. This test is the witness that fails if the entries come back.
+    """
+    for tag in (13, 14):
+        ava = _tlv(0x30, _OID_2_5_4_6 + _tlv(tag, b"US"))
+        node, _ = decode(_tlv(0x30, _tlv(0x31, ava)))
+        with pytest.raises(CertificateError, match="not a string type"):
+            parse_name(node)
+
+
+def test_a_string_type_this_codec_does_not_model_is_refused_by_name() -> None:
+    """An unmodelled character string type must not be read through a guessed codec.
+
+    Tag 21 sits inside the 18-22 band that X.680 Table 1 labels character string types, but this codec has
+    no entry for it, because the number could not be re-read from the text this session and inventing one is
+    how the table broke. The refusal therefore has to distinguish "a string type I decline" from "not a
+    string type": the second would be a false statement about the bytes, and a caller that trusts a name it
+    could not actually read is the failure this package exists to prevent.
+    """
+    ava = _tlv(0x30, _OID_2_5_4_6 + _tlv(21, b"Videotex"))
+    node, _ = decode(_tlv(0x30, _tlv(0x31, ava)))
+    with pytest.raises(CertificateError, match="does not model"):
+        parse_name(node)
 
 
 def test_encoding_order_is_root_first_and_the_string_form_reverses_it() -> None:
@@ -234,7 +266,7 @@ def test_name_equality_ignores_the_encoding_and_the_bytes() -> None:
         node, _ = decode(_tlv(0x30, _tlv(0x31, ava)))
         return parse_name(node)
 
-    printable = name_with(14, b"US")
+    printable = name_with(19, b"US")
     utf8_lower = name_with(12, b"us")
     assert printable == utf8_lower, "different types, different case, one name"
     assert printable.raw != utf8_lower.raw

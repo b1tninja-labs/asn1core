@@ -59,21 +59,45 @@ _OID = Tag(6, False, TagClass.universal)
 # definition: BMPString is UTF-16BE, UniversalString is UTF-32BE. §7.1 makes support for
 # TeletexString, BMPString and UniversalString optional; UTF8String and PrintableString are the
 # two a conforming implementation MUST support. The ASCII-restricted types are read as Latin-1 so
-# that decoding never rejects a byte - whether the characters are legal for the type is a separate
-# question, left open in PLAN.md rather than guessed at here. A codec of None means the ambiguous
-# ones: try UTF-8, then fall back to Latin-1.
+# that decoding never rejects a byte - whether the characters are legal for the type is enforced
+# on the DER path in der.py, not guessed at here. A codec of None means the ambiguous ones: try
+# UTF-8, then fall back to Latin-1.
+#
+# The tag numbers come from Rec. ITU-T X.680 (02/2021) Table 1 (§8.6), which assigns universal
+# 13 to the Relative object identifier type and 14 to the TIME type and puts character string
+# types in 18-22 and 25-30, together with the restricted-character-string table in §41 that
+# numbers NumericString 18, PrintableString 19 and TeletexString (T61String) 20. An earlier
+# version of this table had 13 numericString, 14 printableString, 19 teletexString and
+# 20 videotexString, which is the 18-22 band shifted down four places with two invented entries
+# added. It survived because every affected value is ASCII: 520 of the 577 attribute values in the
+# local trust store carry tag 19, and a PrintableString decoded as Latin-1 gives the same text as a
+# TeletexString decoded through the ambiguous path, so the only observable symptom was `kind` -
+# which is documented as load-bearing, and which was therefore wrong for almost every name in a
+# default Windows trust store. Confirmed against three independent sources on 2026-11-07: the
+# store's own bytes, cryptography's encoder (it emits 0x13 for `C=US` and 0x16 for a domain
+# component), and X.680.
+#
+# VideotexString and GraphicString are deliberately absent: both are character string types inside the
+# bands X.680 Table 1 describes, but I could not re-read their individual numbers from the extracted text
+# this session, and inventing a tag for a type this repository cannot measure is exactly how the table broke
+# in the first place. An attribute value carrying an unmodelled string tag is refused by name below rather
+# than mislabelled.
 _CODECS: dict[int, tuple[str, str | None]] = {
     12: ("utf8String", "utf-8"),
-    13: ("numericString", "latin-1"),
-    14: ("printableString", "latin-1"),
-    19: ("teletexString", None),
-    20: ("videotexString", None),
+    18: ("numericString", "latin-1"),
+    19: ("printableString", "latin-1"),
+    20: ("teletexString", None),
     22: ("ia5String", "latin-1"),
     26: ("visibleString", "latin-1"),
     27: ("generalString", "latin-1"),
     28: ("universalString", "utf-32-be"),
     30: ("bmpString", "utf-16-be"),
 }
+
+# X.680 Table 1: the universal tags that name a character string type. Two of them are not modelled
+# above, and a value under one of those is a string type that this codec declines, not a value that is
+# not a string. Saying which is the difference between an honest refusal and a false statement.
+_CHARACTER_STRING_TAGS = frozenset({*range(18, 23), *range(25, 31)})
 
 # RFC 4514 §3's descriptor table. Types outside it render as dotted OIDs: cryptography does the
 # same, including for emailAddress, and inventing a short name would make two renderings of one
@@ -216,6 +240,11 @@ def _attribute(node: Node) -> tuple[str, str]:
         raise CertificateError(f"an attribute value is a universal string type, found {node.tag!r}")
     entry = _CODECS.get(node.tag.number)
     if entry is None:
+        if node.tag.number in _CHARACTER_STRING_TAGS:
+            raise CertificateError(
+                f"attribute value tag {node.tag.number} is a character string type this codec "
+                f"does not model; it is not decoded by guesswork"
+            )
         raise CertificateError(f"attribute value tag {node.tag.number} is not a string type")
     kind, codec = entry
     content = node.payload

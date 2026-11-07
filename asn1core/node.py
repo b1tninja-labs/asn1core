@@ -245,7 +245,13 @@ def _der_value_check(tag: Tag, payload: bytes, node: Node, *, offset: int) -> No
     """
     if not tag.is_universal():
         return
-    from .der import check_bit_string, check_boolean, check_integer, check_set_of
+    from .der import (
+        check_bit_string,
+        check_boolean,
+        check_integer,
+        check_printable_string,
+        check_set_of,
+    )
 
     if tag.number == 1:
         check_boolean(payload, offset=offset)
@@ -268,3 +274,9 @@ def _der_value_check(tag: Tag, payload: bytes, node: Node, *, offset: int) -> No
         check_generalized_time(payload, offset=offset)
     elif tag.number == 17:
         check_set_of(node)
+    elif tag.number == 19:
+        # printable-charset. Tag 19 is PrintableString (X.680 Table 1 puts character string types in
+        # 18-22 and 25-30; 13 is Relative-OID and 14 is the TIME type). Unlike every other check here this
+        # one refuses a *value*, not a spelling, so it is deliberately absent from the tolerant path: a
+        # certificate that shipped a `&` in a PrintableString must stay inspectable.
+        check_printable_string(payload, offset=offset)

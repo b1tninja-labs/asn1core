@@ -15,12 +15,14 @@ import pathlib
 import pytest
 
 from asn1core import (
+    PRINTABLE_ALPHABET,
     DecodeError,
     DepthExceeded,
     DerViolation,
     check_bit_string,
     check_boolean,
     check_integer,
+    check_printable_string,
     check_set_of,
     decode,
     encode_der,
@@ -126,6 +128,52 @@ def test_bit_string_content_rules() -> None:
     assert node.content() == bytes.fromhex("034141")
     with pytest.raises(DerViolation):
         decode(bytes.fromhex("0303034141"), der=True)
+
+
+def _printable_tlv(content: bytes) -> bytes:
+    """A primitive PrintableString (universal 19, identifier octet `13`) holding `content`."""
+    return bytes([0x13, len(content)]) + content
+
+
+def test_printable_string_permitted_alphabet_is_exactly_table_10() -> None:
+    """The alphabet is data with a cardinality, so the cardinality is pinned.
+
+    X.680 (02/2021) §41.4 Table 10 lists latin capitals, latin small letters, digits, SPACE, and eleven
+    specials: APOSTROPHE ' LEFT PARENTHESIS ( RIGHT PARENTHESIS ) PLUS SIGN + COMMA , HYPHEN-MINUS - FULL
+    STOP . SOLIDUS / COLON : EQUALS SIGN = QUESTION MARK. That is 26 + 26 + 10 + 1 + 11 = 74 characters. A
+    silent deletion from the frozenset would otherwise show up only as a certificate refused somewhere else.
+    """
+    assert len(PRINTABLE_ALPHABET) == 74
+    assert sum(c.isascii() and c.isalpha() for c in PRINTABLE_ALPHABET) == 52
+    assert sum(c.isdigit() for c in PRINTABLE_ALPHABET) == 10
+    assert " " in PRINTABLE_ALPHABET
+    assert PRINTABLE_ALPHABET.isdisjoint(set('!"%;<>@_&'))  # X.208-era specials are not in Table 10
+
+    every = "".join(sorted(PRINTABLE_ALPHABET)).encode("latin-1")
+    assert check_printable_string(every) == every
+    node, end = decode(_printable_tlv(every), der=True)
+    assert end == len(_printable_tlv(every))
+    assert node.payload == every, "all 74 characters survive a strict decode unchanged"
+
+
+def test_printable_string_outside_table_10_is_refused_by_rule_on_the_der_path_only() -> None:
+    """The value does not exist in the type, so DER refuses it and BER keeps the octets.
+
+    `@` is the row in VECTORS.md; `&` and `_` are what legacy issuers actually shipped inside names that
+    claimed PrintableString, and é is the byte that made this look like a TeletexString problem until the tag
+    numbering was corrected. All four are refused on the strict path under one named rule, and all four stay
+    readable on the tolerant path: refusing to *parse* a shipped certificate would leave a caller unable to
+    report on it, which is worse than reporting the violation.
+    """
+    for bad in (b"Smith & Sons", b"a@b", b"limits_liab", b"Caf\xe9"):
+        with pytest.raises(DerViolation) as raised:
+            decode(_printable_tlv(bad), der=True)
+        assert raised.value.rule == "printable-charset"
+        with pytest.raises(DerViolation):
+            check_printable_string(bad)
+        tolerant, end = decode(_printable_tlv(bad), der=False)
+        assert end == len(_printable_tlv(bad))
+        assert tolerant.raw == _printable_tlv(bad), "the tolerant path keeps the input's own octets"
 
 
 def test_set_of_ordering_is_enforced_on_the_der_path() -> None:

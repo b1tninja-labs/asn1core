@@ -17,7 +17,15 @@ from __future__ import annotations
 
 from .cert import Certificate, Extension, parse_certificate, parse_extensions
 from .crl import Crl, Revoked, parse_crl
-from .der import check_bit_string, check_boolean, check_integer, check_set_of, validate_der
+from .der import (
+    PRINTABLE_ALPHABET,
+    check_bit_string,
+    check_boolean,
+    check_integer,
+    check_printable_string,
+    check_set_of,
+    validate_der,
+)
 from .errors import (
     ArmourError,
     Asn1Error,
@@ -84,6 +92,7 @@ __all__ = [
     "MAX_OID_ARCS",
     "MAX_TAG_NUMBER",
     "NO_EXPIRATION",
+    "PRINTABLE_ALPHABET",
     "SHORT_NAMES",
     "UTC_TIME_CEILING_YEAR",
     "UTC_TIME_FLOOR_YEAR",
@@ -114,6 +123,7 @@ __all__ = [
     "check_generalized_time",
     "check_integer",
     "check_oid",
+    "check_printable_string",
     "check_set_of",
     "check_utc_time",
     "decode",
