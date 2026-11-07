@@ -250,3 +250,24 @@ documents that should be accepted. Still owed: every `[verify against X.690]` ma
 against the ITU text, and negative vectors taken from a second implementation rather than from
 my own reasoning about what it ought to refuse.
 
+### Where X.690 and X.680 can be checked (added 2026-11-07)
+
+The markers above say a rule was written from memory of the encoding rules rather than from the text, and
+`rfclib` cannot reach that text: X.680/X.690 are not in the RFC series. `D:\code\itulibrary` now indexes the
+in-force editions - `Rec. ITU-T X.690 (02/2021) | ISO/IEC 8825-1:2021` and `Rec. ITU-T X.680 (02/2021) |
+ISO/IEC 8824-1:2021` - fetched locally because ITU forbids redistributing the text.
+
+What it turned up already, recorded here rather than in a row, because no row moves without its check:
+
+- `setof-unsorted` points at 11.6, and 11.6 is narrower than the row assumes. The ordering comparison pads the
+  shorter component encoding with zero octets **for comparison only**, and the padding is never emitted. A sort
+  that compares raw encodings without that padding can order a `SET OF` wrongly while still emitting well-formed
+  DER, which is the kind of defect no local test notices.
+- `SET` and `SET OF` are governed by different clauses: 9.3/10.3 order by tag, 11.6 orders by encoding under
+  DER. One note about "SET OF is sorted" does not cover both.
+- `time-leap-second` is marked against the wrong document. X.690 11.7/11.8 fix the form and defer the alphabet
+  to X.680, and nothing in X.690 addresses a seconds value of 60 at all.
+- `oid-first-arc-high` sits in 8.19, the clause whose earlier remembered answer was wrong.
+
+Retiring a marker means editing the row with the edition and subclause attached and the check actually done.
+`itulib` supplies the text and the citation; it does not decide what this codec accepts.
