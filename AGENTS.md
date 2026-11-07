@@ -67,8 +67,9 @@ refusals for length, integer, boolean, bit string and SET OF order.
 **Not done:** RFC 5280 §4.2 extension semantics and §6 path validation, both of which belong to
 `pkix`; the two generated fixtures deliberately carry no digest, because each run makes fresh key
 material; and any form of schema or `.asn` compilation. Nothing is published and no version is
-assigned. Two `PLAN.md` rows stay `[part]`: `dk.indefinite` (the primitive-case refusal is cited but has
-no named test yet) and `dk.corpus` (negative vectors from a second implementation are still owed).
+assigned. One `PLAN.md` row stays `[part]`: `dk.corpus` (negative vectors from a second
+implementation are still owed). `dk.indefinite` closed on 2026-11-11 with the named test its row
+had been waiting for.
 
 ## Invariants
 

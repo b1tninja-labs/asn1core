@@ -275,6 +275,41 @@ def test_indefinite_terminator_is_not_searched_for_inside_content() -> None:
         decode(raw, der=True)
 
 
+def test_primitive_indefinite_length_is_refused() -> None:
+    """The primitive half of the ``len-indefinite`` row, asserted rather than cited-only.
+
+    X.690 (02/2021) 8.1.3.2 a) requires a sender to use the definite form when the encoding is
+    primitive, and 8.1.3 b)/7.1 dynamic conformance give a receiver no licence to accept what no
+    conforming sender may emit. So ``04 80 ... 00 00`` is not an encoding whose content octets
+    are ambiguous; it is not a conforming encoding at all, and the refusal is a cited answer.
+
+    Both modes refuse, under different errors, and the difference is the point:
+
+    - BER raises ``DecodeError``. This is not vacuous: the indefinite path walks children until
+      an end-of-content marker, and ``05 00 00 00`` is a perfectly good NULL followed by one, so
+      a decoder without the primitive guard *accepts* this input and returns a node.
+    - DER raises ``DerViolation``, one check earlier, because indefinite length is not permitted
+      by DER whatever the encoding is. ``DerViolation`` is deliberately not a subclass of
+      ``DecodeError``, so the two refusals stay distinguishable to a caller.
+
+    The offset is the length octet itself - index 1, just past the tag - because that is the
+    octet that makes the encoding illegal, and a caller pointing at the fault should not have to
+    point at its contents.
+    """
+    raw = bytes.fromhex("0480" + "0500" + "0000")
+
+    with pytest.raises(DecodeError) as excinfo:
+        decode(raw)
+    assert type(excinfo.value) is DecodeError, f"got {type(excinfo.value).__name__}"
+    assert "primitive" in str(excinfo.value)
+    assert excinfo.value.offset == 1
+
+    with pytest.raises(DerViolation) as violation:
+        decode(raw, der=True)
+    assert violation.value.rule == "indefinite-length"
+    assert violation.value.offset == 1
+
+
 # ---------------------------------------------------------------------------
 # Defect 6: the original bytes. Defect 7 territory: integer minimality, which
 # cuts both ways and must not be "tidied".

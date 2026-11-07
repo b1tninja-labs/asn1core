@@ -115,11 +115,14 @@ def _parse(
                 offset=after_tag,
             )
         if not tag.constructed:
-            # X.690 spells primitive indefinite content as a sequence of encoding units, and
-            # the corpus row for it is unresolved. Refusing is the honest answer: a decoder
-            # that invents one here disagrees with every other implementation in silence.
+            # X.690 (02/2021) 8.1.3.2 a) requires a sender to use the definite form when the
+            # encoding is primitive, and 7.1 dynamic conformance gives a receiver no licence to
+            # accept what no conforming sender may emit. Refusing is therefore a cited answer,
+            # not a defensive guess: the earlier text here called the corpus row "unresolved",
+            # which stopped being true when the clause was read on 2026-11-07 and left the
+            # error message arguing with VECTORS.md.
             raise DecodeError(
-                "indefinite length on a primitive type is unresolved in VECTORS.md",
+                "indefinite length on a primitive encoding is never conforming (X.690 8.1.3.2 a)",
                 offset=after_tag,
             )
         children, end = _children_indefinite(
