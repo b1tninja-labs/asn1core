@@ -5,6 +5,21 @@ coverage, mypy strict, ruff clean, on 2026-11-07.
 `VECTORS.md` is the conformance corpus: **the corpus is the exit test, and not every row in it
 passes yet.** Read the status section below before believing any claim in the README.
 
+## Finding work
+
+If the person gave you a task, do that task.
+
+If you arrived with nothing to do, run this from this directory:
+
+    python ../sdk-forge/loop.py pickup --who <your name> --project asn1core
+
+Its output is your assignment: one row, already claimed for you, with what to build, the commands that prove
+it and the ways to end it. The board decides the order of work, so the row it gives you is the row to work,
+even if it is in another project. `NO WORK` is a real answer: ask the person what to work on.
+
+Without the workspace beside this repository, read `.forge/packet.md` if it exists. If it does not, ask what
+to work on.
+
 ## Commands
 
 Everything here was run in this repository and passed. Use the module form: bare `ruff` and
